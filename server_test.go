@@ -169,20 +169,20 @@ func Test_ServerPing(t *testing.T) {
 		t.Fatal("cannot rpc", err)
 	}
 
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Second * 1)
 	if len(webSocketMap) != 1 {
 		t.Fatal("wrong total", len(webSocketMap))
 	}
 
-	conn1.c.Close() // close underlying socket
-	time.Sleep(time.Second * 2)
-	if len(webSocketMap) != 0 {
+	conn1.c.Close() // close underlying socket - client will redial
+	time.Sleep(time.Second * 1)
+	if len(webSocketMap) != 1 {
 		t.Fatal("wrong end total", len(webSocketMap))
 	}
 
 }
 
-func Test_ServerDubClient(t *testing.T) {
+func Test_ServerDupClient(t *testing.T) {
 	setupServer(t)
 
 	conn1 := dial(t, *serverHandler.url, "client1")

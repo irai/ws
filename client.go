@@ -11,7 +11,7 @@ import (
 // func WebSocketDial(url url.URL, readChannel chan<- []byte) (wsConn *WSConn, err error) {
 //
 func WebSocketDial(url url.URL, clientId string, handler WSClient) (wsConn *WSConn, err error) {
-	log.WithFields(log.Fields{"clientId": clientId, "server": url.String()}).Info("WS client dial")
+	log.WithFields(log.Fields{"clientId": clientId, "server": url.String()}).Debug("WS client dial")
 
 	wsConn = &WSConn{url: url, ClientId: clientId, callback: handler}
 	wsConn.c, _, err = websocket.DefaultDialer.Dial(url.String(), nil)
@@ -35,18 +35,23 @@ func WebSocketDial(url url.URL, clientId string, handler WSClient) (wsConn *WSCo
 	return wsConn, nil
 }
 
-/**
-func (wsConn *WSConn) Redial() (newConn *WSConn, err error) {
-	log.Info("WS client attempt to restablish websocket")
-	newConn, err = WebSocketDial(wsConn.url, wsConn.ClientId)
-	if err != nil {
-		log.Error("WS client failed to connect to websocket server ", err)
-		return nil, err
+func (wsConn *WSConn) redialLoop() {
+	for {
+		log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS client redial ")
+		conn, _, err := websocket.DefaultDialer.Dial(wsConn.url.String(), nil)
+		if err == nil {
+			wsConn2 := &WSConn{c: conn, ClientId: wsConn.ClientId}
+			if err = wsConn2.sendAuthentication(); err == nil {
+				wsConn.c = conn
+				log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS client redial successful ")
+				return
+			}
+			conn.Close()
+		}
+		log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Error("WS redial: ", err)
+		time.Sleep(time.Second * 30)
 	}
-
-	return newConn, nil
 }
-***/
 
 func (wsConn *WSConn) sendAuthentication() (err error) {
 
@@ -70,12 +75,12 @@ func (wsConn *WSConn) sendAuthentication() (err error) {
 		return err
 	}
 
-	log.Info("WS client dial authentication successful ", wsConn.ClientId)
+	log.Debug("WS client dial authentication successful ", wsConn.ClientId)
 	return nil
 }
 
 func (wsConn *WSConn) clientClose() {
-	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS client socket closing")
+	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS clientClose socket")
 	wsConn.c.Close()
 }
 
@@ -84,16 +89,18 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 	// defer log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS client goroutine ended")
 
 	for {
-		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS client read")
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS client read")
 		msg, err := wsConn.read()
 		if err != nil {
 			if err != base.ErrorClosed {
 				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS client failed to read websocket message", err)
+				wsConn.redialLoop()
+				continue
 			}
 			return
 		}
 
-		log.Info("WS client ", msg)
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS client ", msg)
 		// If response, there will be a goroutine waiting
 		if msg.IsResponse() {
 			if channelIsClosed(wsConn.readChannel) {
@@ -113,18 +120,18 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 			return
 		}
 		if response.Type() != msgNoResponse {
-			log.Info("WS client writing response", response)
+			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS client writing response ", response)
 			_, err := wsConn.Write(response)
 			if err != nil {
 				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server error in response")
 				return
 			}
 		}
-		// log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS client end process msg")
 	}
 
 }
 
+/***
 func (wsConn *WSConn) dontkeepAlive() {
 	pongReceived := false
 	wsConn.c.SetPongHandler(func(msg string) error {
@@ -157,3 +164,4 @@ func (wsConn *WSConn) dontkeepAlive() {
 		}
 	}()
 }
+***/

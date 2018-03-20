@@ -22,7 +22,7 @@ func init() {
 }
 
 func (wsConn *WSConn) serverClose() {
-	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server socket closing")
+	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS serverClose socket")
 
 	wsConn.c.Close()
 
@@ -35,7 +35,6 @@ func (wsConn *WSConn) serverClose() {
 		wsMutex.Unlock()
 		return
 	}
-
 	delete(webSocketMap, wsConn.ClientId)
 	wsMutex.Unlock()
 }
@@ -48,7 +47,7 @@ func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) 
 	// wsConn.c.SetReadDeadline(0)
 
 	for {
-		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS Server read")
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS Server read")
 		msg, err := wsConn.read()
 		if err != nil {
 			if err != base.ErrorClosed {
@@ -64,7 +63,7 @@ func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) 
 				return
 			}
 
-			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS server received response msg ", msg)
+			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Infof("WS server got response type %v len %v", msg.Type(), len(msg))
 			wsConn.readChannel <- msg
 			break
 		}
@@ -74,15 +73,18 @@ func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) 
 			log.Error("websocket Unexpected authentication message")
 
 		default:
-			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server process msg ", msg)
+			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Infof("WS server process msg seq %v type %v len %v",
+				msg.Sequence(), msg.Type(), len(msg))
 			response, err := process(wsConn.ClientId, msg)
-			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server process response", err, response)
+			// log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS server process response", err, response)
 			if err != nil || response == nil {
-				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server process error")
+				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Errorf("WS server process error seq %v type %v len %v",
+					msg.Sequence(), msg.Type(), len(msg))
 				return
 			}
 			if response.Type() != msgNoResponse {
-				log.Info("WS server writing response", response)
+				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Infof("WS server process response seq %v type %v len %v",
+					response.Sequence(), response.Type(), len(response))
 				_, err := wsConn.Write(response)
 				if err != nil {
 					log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server error in response")
@@ -107,11 +109,11 @@ func WebSocketHandler(handler WSServer) http.Handler {
 		// device.DeviceId = deviceId
 		wsConn := &WSConn{}
 		wsConn.RemoteIP = net.ParseIP(base.HTTPGetSrcIP(r))
-		log.WithFields(log.Fields{"public_ip": wsConn.RemoteIP}).Info("WS server new connection")
+		log.WithFields(log.Fields{"public_ip": wsConn.RemoteIP}).Debug("WS server new websocket")
 
 		wsConn.c, err = upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Error("upgrade:", err)
+			log.Error("WS server upgrade:", err)
 			base.SendHttpSpxError(w, http.StatusBadRequest, base.ErrorJWTInvalid.AddError(err))
 			return
 		}
@@ -134,7 +136,7 @@ func WebSocketHandler(handler WSServer) http.Handler {
 		// log.Info("WS Server authentication decode")
 		err = msg.Decode(&wsConn.ClientId)
 		if err != nil {
-			log.Error("WS server could not decode first message: %s %s", err, msg)
+			log.Errorf("WS server could not decode first message: %s %s", err, msg)
 			wsConn.Close()
 			return
 		}
@@ -142,7 +144,7 @@ func WebSocketHandler(handler WSServer) http.Handler {
 		// send OK response back
 		msg, err = EncodeResponse(msg, nil)
 		if err != nil {
-			log.Error("WS server could not encode ack: ", err)
+			log.Error("WS server could not encode auth ack ", err)
 			wsConn.Close()
 			return
 		}
@@ -165,7 +167,7 @@ func WebSocketHandler(handler WSServer) http.Handler {
 		webSocketMap[wsConn.ClientId] = wsConn
 		wsMutex.Unlock()
 
-		log.WithFields(log.Fields{"clientID": wsConn.ClientId, "public_ip": wsConn.RemoteIP}).Info("WS server calling accept handler")
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId, "public_ip": wsConn.RemoteIP}).Info("WS server new websocket connection")
 		handler.Accept(wsConn.ClientId)
 
 		// Create a goroutine to read each websocket. Not very efficient for high volume

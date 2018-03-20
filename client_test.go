@@ -4,7 +4,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"net/url"
 	// "net/url"
+	"spinifex/base"
 	"testing"
+	"time"
 )
 
 // TestServerWSHandler implement the handler interface
@@ -60,5 +62,51 @@ func Test_ClientDial(t *testing.T) {
 		t.Fatal("failed to get response", err, msg, response)
 	}
 	log.Info("received successful response")
+
+}
+
+func Test_ClientRedial(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	conn := dial(t, *s.url, "client123")
+	defer conn.Close()
+	conn2 := dial(t, *s.url, "client1234")
+	defer conn2.Close()
+
+	in := simpleMsg{N: 101, Msg: "conn 2 first msg"}
+	out := simpleAnswer{}
+	err := conn.RPC(testEmptyResponse, &in, nil)
+	if err != nil {
+		t.Fatal("cannot rpc", err)
+	}
+
+	err = conn.RPC(testTimeout, &in, &out)
+	if err == nil || err != base.ErrorTimeout {
+		t.Fatal("cannot rpc timeout", err)
+	}
+
+	n := 3
+	i := 0
+	for i = 0; i < n; i++ {
+		time.Sleep(time.Second * 1)
+		log.Info("msg ", i)
+		err = conn.RPC(testEmptyResponse, &in, nil)
+		if err == nil {
+			break
+		}
+	}
+	if i >= n {
+		t.Fatal("cannot redial ", err)
+	}
+
+	err = conn.RPC(testEmptyResponse, &in, nil)
+	if err != nil {
+		t.Fatal("cannot rpc2", err)
+	}
+	err = conn2.RPC(testEmptyResponse, &in, nil)
+	if err != nil {
+		t.Fatal("cannot rpc3", err)
+	}
 
 }

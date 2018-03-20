@@ -98,7 +98,7 @@ func encode(buf bytes.Buffer, seq uint8, msgType uint8, data interface{}) (msg W
 		enc := gob.NewEncoder(&buf)
 		err = enc.Encode(data)
 		if err != nil {
-			log.Error("encode error:", err)
+			log.Error("WS encode error:", err)
 			return nil, err
 		}
 	}
@@ -113,7 +113,7 @@ func (w WSMsg) Decode(data interface{}) error {
 	dec := gob.NewDecoder(bytes.NewBuffer(w[2:]))
 	err := dec.Decode(data)
 	if err != nil {
-		log.Error("WS failed to decode message: ", err)
+		log.Error("WS decode error: ", err)
 		return err
 	}
 	return nil

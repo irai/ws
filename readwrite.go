@@ -33,14 +33,15 @@ func (wsConn *WSConn) WaitResponse(timeout time.Duration) (msg WSMsg, err error)
 		return msg, nil
 
 	case <-time.After(timeout):
-		log.Error("WS wait timed out")
+		log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Error("WS wait timed out")
 		// close(wsConn.readChannel)
+		wsConn.c.Close() // force readerLoop to exit and redial
 		return WSMsg{}, base.ErrorTimeout
 
 		// default:
 	}
 
-	log.Error("WS wait internal")
+	log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Error("WS wait internal")
 	return WSMsg{}, base.ErrorInternal
 }
 
@@ -94,7 +95,7 @@ func (wsConn *WSConn) Write(msg WSMsg) (seq uint8, err error) {
 
 	wsConn.c.SetWriteDeadline(time.Now().Add(writeWait))
 	if err := wsConn.c.WriteMessage(websocket.BinaryMessage, msg); err != nil {
-		log.Error("WS failed to write websocket msg: ", err)
+		log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Error("WS failed to write websocket msg: ", err)
 		return 0, err
 	}
 
@@ -120,23 +121,23 @@ func (wsConn *WSConn) RPC(msgType uint8, in interface{}, out interface{}) (err e
 }
 
 func (wsConn *WSConn) WriteAndWaitResponse(msg WSMsg) (response WSMsg, err error) {
-	log.Info("Writing")
+	// log.Info("Writing")
 	seq, err := wsConn.Write(msg)
 	if err != nil {
 		return WSMsg{}, err
 	}
 
-	log.Info("Waiting")
+	// log.Info("Waiting")
 	response, err = wsConn.WaitResponse(readTimeout)
 	if err != nil {
-		log.Error("WS waiting response ", err)
+		// log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Error("WS waiting response ", err)
 		return WSMsg{}, err
 	}
 	if seq != response.Sequence() {
-		log.Error("WS unexpected sequence: ")
+		log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Error("WS unexpected sequence: ")
 		return WSMsg{}, base.ErrorInternal
 
 	}
-	log.Info("returning")
+	// log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS received response ", response)
 	return response, nil
 }
