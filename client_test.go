@@ -44,6 +44,8 @@ func dial(t *testing.T, u url.URL, clientId string) *WSConn {
 	return conn
 }
 
+var msgToken = "secrettoken"
+
 func Test_ClientDial(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
@@ -51,7 +53,7 @@ func Test_ClientDial(t *testing.T) {
 	conn := dial(t, *s.url, "client123")
 	defer conn.Close()
 
-	msg, err := Encode(testEmptyResponse, &data1)
+	msg, err := Encode(testEmptyResponse, &msgToken, &data1)
 	if err != nil {
 		t.Fatal("cannot encode", err)
 	}
@@ -76,12 +78,12 @@ func Test_ClientRedial(t *testing.T) {
 
 	in := simpleMsg{N: 101, Msg: "conn 2 first msg"}
 	out := simpleAnswer{}
-	err := conn.RPC(testEmptyResponse, &in, nil)
+	err := conn.RPC(testEmptyResponse, &msgToken, &in, nil)
 	if err != nil {
 		t.Fatal("cannot rpc", err)
 	}
 
-	err = conn.RPC(testTimeout, &in, &out)
+	err = conn.RPC(testTimeout, &msgToken, &in, &out)
 	if err == nil || err != base.ErrorTimeout {
 		t.Fatal("cannot rpc timeout", err)
 	}
@@ -91,7 +93,7 @@ func Test_ClientRedial(t *testing.T) {
 	for i = 0; i < n; i++ {
 		time.Sleep(time.Second * 1)
 		log.Info("msg ", i)
-		err = conn.RPC(testEmptyResponse, &in, nil)
+		err = conn.RPC(testEmptyResponse, &msgToken, &in, nil)
 		if err == nil {
 			break
 		}
@@ -100,11 +102,11 @@ func Test_ClientRedial(t *testing.T) {
 		t.Fatal("cannot redial ", err)
 	}
 
-	err = conn.RPC(testEmptyResponse, &in, nil)
+	err = conn.RPC(testEmptyResponse, &msgToken, &in, nil)
 	if err != nil {
 		t.Fatal("cannot rpc2", err)
 	}
-	err = conn2.RPC(testEmptyResponse, &in, nil)
+	err = conn2.RPC(testEmptyResponse, &msgToken, &in, nil)
 	if err != nil {
 		t.Fatal("cannot rpc3", err)
 	}

@@ -56,7 +56,7 @@ func (wsConn *WSConn) redialLoop() {
 func (wsConn *WSConn) sendAuthentication() (err error) {
 
 	// log.Info("WS client authentication start ", wsConn.ClientId)
-	msg, err := Encode(msgAuthentication, &wsConn.ClientId)
+	msg, err := Encode(msgAuthentication, nil, &wsConn.ClientId)
 	if err != nil {
 		log.Error("WS client dial could not encode auth msg", err)
 		return err

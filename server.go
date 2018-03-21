@@ -132,9 +132,10 @@ func WebSocketHandler(handler WSServer) http.Handler {
 			return
 		}
 
+		token := ""
 		// var id string
 		// log.Info("WS Server authentication decode")
-		err = msg.Decode(&wsConn.ClientId)
+		err = msg.Decode(&token, &wsConn.ClientId)
 		if err != nil {
 			log.Errorf("WS server could not decode first message: %s %s", err, msg)
 			wsConn.Close()

@@ -99,14 +99,14 @@ func Test_ServerConn(t *testing.T) {
 	in := simpleMsg{N: 100, Msg: "conn 1 first msg"}
 	// out := simpleAnswer{}
 
-	err := conn1.RPC(testEmptyResponse, &in, nil)
+	err := conn1.RPC(testEmptyResponse, &msgToken, &in, nil)
 	if err != nil {
 		t.Fatal("cannot rpc", err)
 	}
 
 	in2 := simpleMsg{N: 101, Msg: "conn 2 first msg"}
 	out2 := simpleAnswer{}
-	err = conn2.RPC(testTimeout, &in2, &out2)
+	err = conn2.RPC(testTimeout, &msgToken, &in2, &out2)
 	if err == nil || err != base.ErrorTimeout {
 		t.Fatal("cannot rpc", err)
 	}
@@ -114,7 +114,7 @@ func Test_ServerConn(t *testing.T) {
 	conn2.Close()
 
 	// resend in 1
-	err = conn1.RPC(testEmptyResponse, &in, nil)
+	err = conn1.RPC(testEmptyResponse, &msgToken, &in, nil)
 	if err != nil {
 		t.Fatal("cannot rpc", err)
 	}
@@ -164,7 +164,7 @@ func Test_ServerPing(t *testing.T) {
 	in := simpleMsg{N: 100, Msg: "conn 1 first msg"}
 	// out := simpleAnswer{}
 
-	err := conn1.RPC(testEmptyResponse, &in, nil)
+	err := conn1.RPC(testEmptyResponse, &msgToken, &in, nil)
 	if err != nil {
 		t.Fatal("cannot rpc", err)
 	}

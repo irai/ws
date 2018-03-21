@@ -16,7 +16,7 @@ func Test_ReadWriteSequence(t *testing.T) {
 	for i := 0; i < 1024; i++ {
 		data := simpleMsg{N: i, Msg: "bob"}
 
-		msg, err := Encode(testEmptyResponse, &data)
+		msg, err := Encode(testEmptyResponse, &msgToken, &data)
 		if err != nil {
 			t.Fatal("cannot encode", err)
 		}

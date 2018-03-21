@@ -102,8 +102,8 @@ func (wsConn *WSConn) Write(msg WSMsg) (seq uint8, err error) {
 	return msg.Sequence(), nil
 }
 
-func (wsConn *WSConn) RPC(msgType uint8, in interface{}, out interface{}) (err error) {
-	msg, err := Encode(msgType, in)
+func (wsConn *WSConn) RPC(msgType uint8, token *string, in interface{}, out interface{}) (err error) {
+	msg, err := Encode(msgType, token, in)
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func (wsConn *WSConn) RPC(msgType uint8, in interface{}, out interface{}) (err e
 		return err
 	}
 	if out != nil {
-		err = response.Decode(out)
+		err = response.Decode(nil, out)
 		if err != nil {
 			return err
 		}

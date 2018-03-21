@@ -78,26 +78,32 @@ func (w WSMsg) IsResponse() bool {
 	}
 }
 
-func Encode(msgType uint8, data interface{}) (msg WSMsg, err error) {
+func Encode(msgType uint8, token *string, data interface{}) (msg WSMsg, err error) {
 	var buf bytes.Buffer
-	return encode(buf, msgSeqNew, msgType, data)
+	return encode(buf, msgSeqNew, msgType, token, data)
 }
 
 //EncodeResponse will reuse previous message
 func EncodeResponse(old WSMsg, data interface{}) (msg WSMsg, err error) {
 	buf := bytes.NewBuffer(old)
 	buf.Reset()
-	return encode(*buf, old.Sequence()|msgSeqResponse, old.Type(), data)
+	return encode(*buf, old.Sequence()|msgSeqResponse, old.Type(), nil, data)
 }
 
-func encode(buf bytes.Buffer, seq uint8, msgType uint8, data interface{}) (msg WSMsg, err error) {
+func encode(buf bytes.Buffer, seq uint8, msgType uint8, token *string, data interface{}) (msg WSMsg, err error) {
+	if token == nil {
+		var noToken = ""
+		token = &noToken
+	}
+
 	buf.WriteByte(seq)
 	buf.WriteByte(msgType)
 
 	if data != nil {
 		enc := gob.NewEncoder(&buf)
+		err1 := enc.Encode(token)
 		err = enc.Encode(data)
-		if err != nil {
+		if err != nil || err1 != nil {
 			log.Error("WS encode error:", err)
 			return nil, err
 		}
@@ -105,13 +111,20 @@ func encode(buf bytes.Buffer, seq uint8, msgType uint8, data interface{}) (msg W
 
 	msg = WSMsg(buf.Bytes())
 	return
-
 }
 
-func (w WSMsg) Decode(data interface{}) error {
-
+func (w WSMsg) Decode(token *string, data interface{}) error {
+	empty := ""
 	dec := gob.NewDecoder(bytes.NewBuffer(w[2:]))
-	err := dec.Decode(data)
+	if token == nil { // caller is not interested in token
+		token = &empty
+	}
+	err := dec.Decode(&token)
+	if err != nil {
+		log.Error("WS decode token error: ", err)
+		return err
+	}
+	err = dec.Decode(data)
 	if err != nil {
 		log.Error("WS decode error: ", err)
 		return err
