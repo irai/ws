@@ -65,7 +65,7 @@ func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) 
 
 			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Infof("WS server got response type %v len %v", msg.Type(), len(msg))
 			wsConn.readChannel <- msg
-			break
+			continue
 		}
 
 		switch msg.Type() {
