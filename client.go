@@ -134,8 +134,8 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 
 }
 
-// Wait 10 seconds longer the server ping than ping
-var clientPingPeriod = pingPeriod + (10 * time.Second)
+// Wait 20 seconds longer the server ping than ping
+var clientPingPeriod = pingPeriod + (20 * time.Second)
 
 func (wsConn *WSConn) clientPingLoop() {
 	pingReceived := false
@@ -145,14 +145,18 @@ func (wsConn *WSConn) clientPingLoop() {
 		return nil
 	})
 
-	defer log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Error("PING goroutine terminated")
+	defer log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Error("PING not received from server. goroutine terminated")
 
 	for {
 		pingReceived = false
 		time.Sleep(clientPingPeriod)
 
 		if !pingReceived {
+			return
+
+			/***
 			log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Info("PING")
+
 			wsConn.writeMutex.Lock()
 			//err := wsConn.c.WriteMessage(websocket.PingMessage, []byte("keepalive"))
 			err := wsConn.c.WriteControl(websocket.PingMessage, []byte("keepalive"), time.Now().Add(writeWait))
@@ -163,6 +167,7 @@ func (wsConn *WSConn) clientPingLoop() {
 				wsConn.c.Close()
 				return
 			}
+			***/
 		}
 	}
 }
