@@ -152,6 +152,8 @@ func (wsConn *WSConn) clientPingLoop() {
 		time.Sleep(clientPingPeriod)
 
 		if !pingReceived {
+			// Force reader error to activate redial
+			wsConn.c.Close()
 			return
 
 			/***
