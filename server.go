@@ -98,7 +98,7 @@ func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) 
 
 var upgrader = websocket.Upgrader{}
 
-func WebSocketHandler(handler WSServer) http.Handler {
+func WebSocketHandler(handler WSServer) http.HandlerFunc {
 
 	// Reset the map - restart many times in testing
 	webSocketMap = make(map[string]*WSConn, 128)
