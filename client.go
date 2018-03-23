@@ -31,6 +31,8 @@ func WebSocketDial(url url.URL, clientId string, handler WSClient) (wsConn *WSCo
 	// Client reader goroutine
 	go wsConn.clientReaderLoop(wsConn.callback.Process)
 
+	go wsConn.clientPingLoop()
+
 	log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS client dial success")
 	return wsConn, nil
 }
@@ -43,6 +45,7 @@ func (wsConn *WSConn) redialLoop() {
 			wsConn2 := &WSConn{c: conn, ClientId: wsConn.ClientId}
 			if err = wsConn2.sendAuthentication(); err == nil {
 				wsConn.c = conn
+				go wsConn.clientPingLoop()
 				log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS client redial successful ")
 				return
 			}
@@ -131,20 +134,24 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 
 }
 
-/***
-func (wsConn *WSConn) dontkeepAlive() {
-	pongReceived := false
-	wsConn.c.SetPongHandler(func(msg string) error {
-		pongReceived = true
-		log.Info("PONG")
+// Wait 10 seconds longer the server ping than ping
+var clientPingPeriod = pingPeriod + (10 * time.Second)
+
+func (wsConn *WSConn) clientPingLoop() {
+	pingReceived := false
+	wsConn.c.SetPingHandler(func(msg string) error {
+		pingReceived = true
+		log.Info("PING")
 		return nil
 	})
 
-	go func() {
-		defer log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Error("PING goroutine terminated")
+	defer log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Error("PING goroutine terminated")
 
-		for {
-			pongReceived = false
+	for {
+		pingReceived = false
+		time.Sleep(clientPingPeriod)
+
+		if !pingReceived {
 			log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Info("PING")
 			wsConn.writeMutex.Lock()
 			//err := wsConn.c.WriteMessage(websocket.PingMessage, []byte("keepalive"))
@@ -152,16 +159,10 @@ func (wsConn *WSConn) dontkeepAlive() {
 			wsConn.writeMutex.Unlock()
 			if err != nil {
 				log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Error("WS failed to write PING", err)
-				wsConn.Close()
-				return
-			}
-			time.Sleep(pingPeriod)
-			if !pongReceived {
-				log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Error("WS PING timed out - closing websocket")
-				wsConn.Close()
+				// Force reader error to activate redial
+				wsConn.c.Close()
 				return
 			}
 		}
-	}()
+	}
 }
-***/
