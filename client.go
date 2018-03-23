@@ -141,7 +141,7 @@ func (wsConn *WSConn) clientPingLoop() {
 	pingReceived := false
 	wsConn.c.SetPingHandler(func(msg string) error {
 		pingReceived = true
-		log.Info("PING")
+		log.Info("PING recv")
 		return nil
 	})
 
