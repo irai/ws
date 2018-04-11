@@ -219,3 +219,17 @@ func GetWebSocketByClientId(clientId string) (wsConn *WSConn) {
 	}
 	return wsConn
 }
+
+func GetWebSocketByRemoteIP(ip net.IP) (wsConn *WSConn) {
+	wsMutex.Lock()
+	defer wsMutex.Unlock()
+
+	for _, wsConn := range webSocketMap {
+		if wsConn.RemoteIP.Equal(ip) {
+			return wsConn
+		}
+	}
+	log.Warnf("CMD cannot find websocket for remote IP %s", ip)
+	log.Info("websocketMap ", webSocketMap)
+	return nil
+}
