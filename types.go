@@ -40,14 +40,14 @@ var (
 )
 
 type WSServer interface {
-	Accept(clientId string) error
+	Accept(wsConn *WSConn) error
 	// Process(msg *WSMsg) error
 	WSClient
 }
 
 type WSClient interface {
 	Process(clientId string, msg WSMsg) (response WSMsg, err error)
-	Closed()
+	Closed(wsConn *WSConn)
 }
 
 type WSConn struct {

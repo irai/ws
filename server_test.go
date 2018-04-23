@@ -62,8 +62,8 @@ func (h TestServerWSHandler) Process(clientId string, msg WSMsg) (response WSMsg
 	return NoResponse, nil
 }
 
-func (h TestServerWSHandler) Accept(clientId string) error {
-	log.Info("WS server running accept ", clientId)
+func (h TestServerWSHandler) Accept(wsConn *WSConn) error {
+	log.Info("WS server running accept ", wsConn.ClientId)
 	return nil
 }
 

@@ -169,7 +169,7 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 		wsMutex.Unlock()
 
 		log.WithFields(log.Fields{"clientID": wsConn.ClientId, "public_ip": wsConn.RemoteIP}).Info("WS server new websocket connection")
-		handler.Accept(wsConn.ClientId)
+		handler.Accept(wsConn)
 
 		// Create a goroutine to read each websocket. Not very efficient for high volume
 		go wsConn.serverReaderLoop(handler.Process)
