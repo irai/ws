@@ -33,7 +33,12 @@ func (h TestClientWSHandler) Process(clientId string, msg WSMsg) (response WSMsg
 // return nil
 // }
 
-func (h TestClientWSHandler) Closed() { log.Info("WS client socket closed ") }
+var countClosed int
+
+func (h TestClientWSHandler) Closed(wsConn *WSConn) {
+	countClosed++
+	log.Infof("WS client closed %d", countClosed)
+}
 
 func dial(t *testing.T, u url.URL, clientId string) *WSConn {
 
@@ -65,6 +70,31 @@ func Test_ClientDial(t *testing.T) {
 	}
 	log.Info("received successful response")
 
+}
+
+func Test_ClientDialDuplicated(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	countClosed = 0
+
+	AutoRedial = false
+	defer func() { AutoRedial = true }()
+
+	conn := dial(t, *s.url, "client123")
+	defer conn.Close()
+
+	conn2 := dial(t, *s.url, "client123")
+	defer conn2.Close()
+
+	conn3 := dial(t, *s.url, "client123")
+	defer conn3.Close()
+
+	time.Sleep(time.Second * 2)
+
+	if countClosed != 2 {
+		t.Fatal("failed to close ws ", countClosed)
+	}
 }
 
 func Test_ClientRedial(t *testing.T) {

@@ -62,12 +62,18 @@ func (h TestServerWSHandler) Process(clientId string, msg WSMsg) (response WSMsg
 	return NoResponse, nil
 }
 
+var countConnections = 0
+
 func (h TestServerWSHandler) Accept(wsConn *WSConn) error {
-	log.Info("WS server running accept ", wsConn.ClientId)
+	countConnections++
+	log.Info("test accept success ", wsConn.ClientId, countConnections)
 	return nil
 }
 
-func (h TestServerWSHandler) Closed() { log.Info("WS server socket closed ") }
+func (h TestServerWSHandler) Closed(wsConn *WSConn) {
+	countConnections--
+	log.Info("test socket closed ", countConnections)
+}
 
 func newServer(t *testing.T) *wsServer {
 	var s wsServer
@@ -90,6 +96,8 @@ func Test_ServerConn(t *testing.T) {
 	// defer s.Close()
 	setupServer(t)
 
+	countConnections = 0
+
 	conn1 := dial(t, *serverHandler.url, "client1")
 	defer conn1.Close()
 
@@ -107,11 +115,11 @@ func Test_ServerConn(t *testing.T) {
 	in2 := simpleMsg{N: 101, Msg: "conn 2 first msg"}
 	out2 := simpleAnswer{}
 	err = conn2.RPC(testTimeout, &msgToken, &in2, &out2)
-	if err == nil || err != base.ErrorTimeout {
-		t.Fatal("cannot rpc", err)
+	if err == nil || err != base.ErrorTimeout || countConnections != 2 {
+		t.Fatal("cannot rpc", err, countConnections)
 	}
 
-	conn2.Close()
+	conn2.Close() // will redial
 
 	// resend in 1
 	err = conn1.RPC(testEmptyResponse, &msgToken, &in, nil)
@@ -185,19 +193,25 @@ func Test_ServerPing(t *testing.T) {
 func Test_ServerDupClient(t *testing.T) {
 	setupServer(t)
 
+	countConnections = 0
+	AutoRedial = false
+	defer func() { AutoRedial = true }()
+
 	conn1 := dial(t, *serverHandler.url, "client1")
 	defer conn1.Close()
 	conn2 := dial(t, *serverHandler.url, "client2")
 	defer conn2.Close()
 
-	if len(webSocketMap) != 2 {
-		t.Fatal("wrong total", len(webSocketMap))
+	// time.Sleep(time.Second * 1)
+	if len(webSocketMap) != 2 || countConnections != 2 {
+		t.Fatal("wrong total", len(webSocketMap), countConnections)
 	}
 
 	conn3 := dial(t, *serverHandler.url, "client1")
 	defer conn3.Close()
 
-	if len(webSocketMap) != 2 {
-		t.Fatal("wrong total", len(webSocketMap))
+	time.Sleep(time.Second * 1)
+	if len(webSocketMap) != 2 || countConnections != 2 {
+		t.Fatal("wrong total", len(webSocketMap), countConnections)
 	}
 }

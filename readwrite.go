@@ -71,15 +71,6 @@ func (wsConn *WSConn) read() (msg WSMsg, err error) {
 	return msg, nil
 }
 
-func (wsConn *WSConn) Close() {
-	log.Info("WS closing")
-	wsConn.c.SetWriteDeadline(time.Now().Add(writeWait))
-	wsConn.c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-	time.Sleep(closeGracePeriod)
-
-	wsConn.c.Close()
-}
-
 func (wsConn *WSConn) Write(msg WSMsg) (seq uint8, err error) {
 	// log.Info("write")
 

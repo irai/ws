@@ -21,26 +21,35 @@ func init() {
 	go serverPingLoop()
 }
 
+// serverClose is called by the background reader goroutine when the ws fails or is closed.
 func (wsConn *WSConn) serverClose() {
-	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS serverClose socket")
+	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server close socket")
 
-	wsConn.c.Close()
+	// check close was not initiated normally by another goroutine.
+	wsConn.writeMutex.Lock()
+	closing := wsConn.closing
+	wsConn.closing = true
+	wsConn.writeMutex.Unlock()
 
 	// Delete entry from online table
 	// ONLY if the WS has not restablished for the same device ID name
 	wsMutex.Lock()
 	ws := webSocketMap[wsConn.ClientId]
-	if ws == nil || ws != wsConn {
-		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server deleting websocket map entry")
-		wsMutex.Unlock()
-		return
+	if ws == wsConn {
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server deleting websocket map")
+		delete(webSocketMap, wsConn.ClientId)
 	}
-	delete(webSocketMap, wsConn.ClientId)
 	wsMutex.Unlock()
+
+	// if it was not closing normally, then cleanup
+	if !closing {
+		wsConn.c.Close()
+		wsConn.callback.Closed(wsConn)
+	}
 }
 
 func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) (response WSMsg, err error)) {
-	// defer log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server goroutine ended")
+	defer log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server goroutine ended")
 	defer wsConn.serverClose()
 
 	// wsConn.c.SetReadDeadline(time.Now().Add(writeWait))
@@ -50,7 +59,7 @@ func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) 
 		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS Server read")
 		msg, err := wsConn.read()
 		if err != nil {
-			if err != base.ErrorClosed {
+			if err != base.ErrorClosed && !wsConn.closing { // normal closure and not closing
 				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server failed to read websocket message", err)
 			}
 			return
@@ -158,17 +167,24 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 			return
 		}
 
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId, "public_ip": wsConn.RemoteIP}).Info("WS server new websocket connection")
+
 		// Add WS to active list
 		// Close existing stale socket first
 		wsMutex.Lock()
 		if ws, ok := webSocketMap[wsConn.ClientId]; ok == true {
 			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Warn("WS server closing duplicated client id")
-			ws.Close()
+
+			wsMutex.Unlock()
+			ws.serverClose()
+			wsMutex.Lock()
+			// clear map and close socket to cause reader to exit and cleanup
+			// delete(webSocketMap, wsConn.ClientId)
+			// ws.c.Close()
 		}
 		webSocketMap[wsConn.ClientId] = wsConn
 		wsMutex.Unlock()
 
-		log.WithFields(log.Fields{"clientID": wsConn.ClientId, "public_ip": wsConn.RemoteIP}).Info("WS server new websocket connection")
 		handler.Accept(wsConn)
 
 		// Create a goroutine to read each websocket. Not very efficient for high volume

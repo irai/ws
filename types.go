@@ -36,7 +36,8 @@ const (
 )
 
 var (
-	NoResponse = WSMsg{0x00, msgNoResponse}
+	NoResponse      = WSMsg{0x00, msgNoResponse}
+	AutoRedial bool = true
 )
 
 type WSServer interface {
@@ -51,16 +52,16 @@ type WSClient interface {
 }
 
 type WSConn struct {
-	c          *websocket.Conn
-	url        url.URL // connection url; used for restablishing connection
-	RemoteIP   net.IP  // store the client public IP on the server side
-	ClientId   string  // store the device id on the server side
-	writeMutex sync.Mutex
-	readMutex  sync.Mutex
-	// responseChannel chan WSMsg
+	c           *websocket.Conn
+	url         url.URL // connection url; used for restablishing connection
+	RemoteIP    net.IP  // store the client public IP on the server side
+	ClientId    string  // store the device id on the server side
+	writeMutex  sync.Mutex
+	readMutex   sync.Mutex
 	readChannel chan WSMsg
 	callback    WSClient
 	msgSeq      uint8
+	closing     bool
 }
 
 // WSMsg is a slice, so pass it by value to all
