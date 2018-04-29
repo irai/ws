@@ -101,6 +101,16 @@ func Test_ClientRedial(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
 
+	countConnections = 0
+	clientPing := clientPingPeriod
+	serverPing := pingPeriod
+	clientPingPeriod = time.Millisecond * 100
+	pingPeriod = time.Millisecond * 100
+	defer func() {
+		pingPeriod = serverPing
+		clientPingPeriod = clientPing
+	}()
+
 	conn := dial(t, *s.url, "client123")
 	defer conn.Close()
 	conn2 := dial(t, *s.url, "client1234")
@@ -139,6 +149,12 @@ func Test_ClientRedial(t *testing.T) {
 	err = conn2.RPC(testEmptyResponse, &msgToken, &in, nil)
 	if err != nil {
 		t.Fatal("cannot rpc3", err)
+	}
+
+	time.Sleep(time.Second * 3)
+
+	if len(webSocketMap) != 2 || countConnections != 2 {
+		t.Fatal("wrong total", len(webSocketMap), countConnections)
 	}
 
 }

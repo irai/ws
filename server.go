@@ -23,7 +23,7 @@ func init() {
 
 // serverClose is called by the background reader goroutine when the ws fails or is closed.
 func (wsConn *WSConn) serverClose() {
-	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server close socket")
+	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server close")
 
 	// check close was not initiated normally by another goroutine.
 	wsConn.writeMutex.Lock()
@@ -49,7 +49,7 @@ func (wsConn *WSConn) serverClose() {
 }
 
 func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) (response WSMsg, err error)) {
-	defer log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server goroutine ended")
+	defer log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server reader goroutine ended")
 	defer wsConn.serverClose()
 
 	// wsConn.c.SetReadDeadline(time.Now().Add(writeWait))

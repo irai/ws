@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+// Wait 20 seconds longer the server ping than ping
+var clientPingPeriod = pingPeriod + (20 * time.Second)
+
 // func WebSocketDial(url url.URL, readChannel chan<- []byte) (wsConn *WSConn, err error) {
 //
 func WebSocketDial(url url.URL, clientId string, handler WSClient) (wsConn *WSConn, err error) {
@@ -59,7 +62,7 @@ func (wsConn *WSConn) redialLoop() {
 // Close will terminate the connection with the remote peer. This is the normal scenario.
 // This informs the peer of a normal closure.
 func (wsConn *WSConn) Close() {
-	log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS client normal close")
+	log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS client close normal")
 
 	wsConn.writeMutex.Lock()
 	defer wsConn.writeMutex.Unlock()
@@ -163,9 +166,6 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 
 }
 
-// Wait 20 seconds longer the server ping than ping
-var clientPingPeriod = pingPeriod + (20 * time.Second)
-
 func (wsConn *WSConn) clientPingLoop() {
 	pingReceived := false
 	wsConn.c.SetPingHandler(func(msg string) error {
@@ -174,31 +174,14 @@ func (wsConn *WSConn) clientPingLoop() {
 		return nil
 	})
 
-	defer log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Error("PING not received from server. goroutine terminated")
+	defer log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Info("WS client PING failed")
 
 	for {
 		pingReceived = false
 		time.Sleep(clientPingPeriod)
 
-		if !pingReceived {
-			// Force reader error to activate redial
-			wsConn.c.Close()
+		if wsConn.closing || !pingReceived {
 			return
-
-			/***
-			log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Info("PING")
-
-			wsConn.writeMutex.Lock()
-			//err := wsConn.c.WriteMessage(websocket.PingMessage, []byte("keepalive"))
-			err := wsConn.c.WriteControl(websocket.PingMessage, []byte("keepalive"), time.Now().Add(writeWait))
-			wsConn.writeMutex.Unlock()
-			if err != nil {
-				log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Error("WS failed to write PING", err)
-				// Force reader error to activate redial
-				wsConn.c.Close()
-				return
-			}
-			***/
 		}
 	}
 }
