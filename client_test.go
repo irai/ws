@@ -37,7 +37,7 @@ var countClosed int
 
 func (h TestClientWSHandler) Closed(wsConn *WSConn) {
 	countClosed++
-	log.Infof("WS client closed %d", countClosed)
+	log.Infof("WS client %s nclosed %d", wsConn.ClientId, countClosed)
 }
 
 func dial(t *testing.T, u url.URL, clientId string) *WSConn {
@@ -55,7 +55,7 @@ func Test_ClientDial(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
 
-	conn := dial(t, *s.url, "client123")
+	conn := dial(t, *s.url, "client123DIAL")
 	defer conn.Close()
 
 	msg, err := Encode(testEmptyResponse, &msgToken, &data1)
@@ -69,7 +69,27 @@ func Test_ClientDial(t *testing.T) {
 		t.Fatal("failed to get response", err, msg, response)
 	}
 	log.Info("received successful response")
+}
 
+func Test_ClientNormalClosure(t *testing.T) {
+	s := newServer(t)
+	defer s.Close()
+
+	countClosed = 0
+
+	conn := dial(t, *s.url, "client1DUP")
+	conn2 := dial(t, *s.url, "client12DUP")
+	conn3 := dial(t, *s.url, "client123DUP")
+
+	conn2.Close()
+	conn.Close()
+	conn3.Close()
+
+	time.Sleep(time.Second * 2)
+
+	if countClosed != 0 {
+		t.Fatal("failed to close ws ", countClosed)
+	}
 }
 
 func Test_ClientDialDuplicated(t *testing.T) {
@@ -81,13 +101,13 @@ func Test_ClientDialDuplicated(t *testing.T) {
 	AutoRedial = false
 	defer func() { AutoRedial = true }()
 
-	conn := dial(t, *s.url, "client123")
+	conn := dial(t, *s.url, "client123DUP")
 	defer conn.Close()
 
-	conn2 := dial(t, *s.url, "client123")
+	conn2 := dial(t, *s.url, "client123DUP")
 	defer conn2.Close()
 
-	conn3 := dial(t, *s.url, "client123")
+	conn3 := dial(t, *s.url, "client123DUP")
 	defer conn3.Close()
 
 	time.Sleep(time.Second * 2)
@@ -101,19 +121,9 @@ func Test_ClientRedial(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
 
-	countConnections = 0
-	clientPing := clientPingPeriod
-	serverPing := pingPeriod
-	clientPingPeriod = time.Millisecond * 100
-	pingPeriod = time.Millisecond * 100
-	defer func() {
-		pingPeriod = serverPing
-		clientPingPeriod = clientPing
-	}()
-
-	conn := dial(t, *s.url, "client123")
+	conn := dial(t, *s.url, "client123REDIAL")
 	defer conn.Close()
-	conn2 := dial(t, *s.url, "client1234")
+	conn2 := dial(t, *s.url, "client1234REDIAL")
 	defer conn2.Close()
 
 	in := simpleMsg{N: 101, Msg: "conn 2 first msg"}
@@ -132,6 +142,74 @@ func Test_ClientRedial(t *testing.T) {
 	i := 0
 	for i = 0; i < n; i++ {
 		time.Sleep(time.Second * 1)
+		log.Info("msg ", i)
+		err = conn.RPC(testEmptyResponse, &msgToken, &in, nil)
+		if err == nil {
+			break
+		}
+	}
+	if i >= n {
+		t.Fatal("cannot redial ", err)
+	}
+
+	err = conn.RPC(testEmptyResponse, &msgToken, &in, nil)
+	if err != nil {
+		t.Fatal("cannot rpc2", err)
+	}
+	err = conn2.RPC(testEmptyResponse, &msgToken, &in, nil)
+	if err != nil {
+		t.Fatal("cannot rpc3", err)
+	}
+
+	time.Sleep(time.Second * 3)
+
+	if len(webSocketMap) != 2 || countConnections != 2 {
+		t.Fatal("wrong total", len(webSocketMap), countConnections)
+	}
+
+}
+
+var (
+	savedClientPingPeriod time.Duration
+	savedServerPingPeriod time.Duration
+)
+
+func setAndSaveEnv(cPingPeriod time.Duration, serverPingPeriod time.Duration) {
+	countConnections = 0
+	savedClientPingPeriod = clientPingPeriod
+	savedServerPingPeriod = pingPeriod
+	clientPingPeriod = cPingPeriod
+	pingPeriod = serverPingPeriod
+}
+func resetEnv() {
+	pingPeriod = savedServerPingPeriod
+	clientPingPeriod = savedClientPingPeriod
+}
+
+func Test_ClientRedialPINGFailure(t *testing.T) {
+
+	setAndSaveEnv(time.Second*2, time.Second*10)
+	defer resetEnv()
+
+	s := newServer(t)
+	defer s.Close()
+
+	conn := dial(t, *s.url, "client123PING")
+	defer conn.Close()
+	conn2 := dial(t, *s.url, "client1234PING")
+	defer conn2.Close()
+
+	in := simpleMsg{N: 101, Msg: "conn 2 first msg"}
+	// out := simpleAnswer{}
+	err := conn.RPC(testEmptyResponse, &msgToken, &in, nil)
+	if err != nil {
+		t.Fatal("cannot rpc", err)
+	}
+
+	n := 3
+	i := 0
+	for i = 0; i < n; i++ {
+		time.Sleep(time.Second * 3)
 		log.Info("msg ", i)
 		err = conn.RPC(testEmptyResponse, &msgToken, &in, nil)
 		if err == nil {

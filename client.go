@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Wait 20 seconds longer the server ping than ping
+// Wait 20 seconds longer the server ping then fail
 var clientPingPeriod = pingPeriod + (20 * time.Second)
 
 // func WebSocketDial(url url.URL, readChannel chan<- []byte) (wsConn *WSConn, err error) {
@@ -79,12 +79,12 @@ func (wsConn *WSConn) Close() {
 
 // clientClose is invoked by the background reader goroutine when the ws fails or is closed.
 func (wsConn *WSConn) clientClose() {
-	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS client goroutine close")
 
 	wsConn.writeMutex.Lock()
 	defer wsConn.writeMutex.Unlock()
 
 	if !wsConn.closing {
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS client goroutine close")
 		wsConn.closing = true
 		wsConn.c.Close()
 		wsConn.callback.Closed(wsConn)
@@ -125,13 +125,15 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS client read")
 		msg, err := wsConn.read()
 		if err != nil {
-			if err != base.ErrorClosed {
+			// abnormal closure & not closing
+			if err != base.ErrorClosed && !wsConn.closing {
 				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS client failed to read websocket message", err)
 				if AutoRedial {
 					wsConn.redialLoop()
 					continue
 				}
 			}
+			wsConn.clientClose()
 			return
 		}
 
@@ -174,13 +176,16 @@ func (wsConn *WSConn) clientPingLoop() {
 		return nil
 	})
 
-	defer log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Info("WS client PING failed")
-
 	for {
 		pingReceived = false
+
 		time.Sleep(clientPingPeriod)
 
-		if wsConn.closing || !pingReceived {
+		if !pingReceived {
+			if !wsConn.closing {
+				log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Error("WS client PING failed")
+				wsConn.c.Close() // wakeup reader goroutine to handle the error
+			}
 			return
 		}
 	}

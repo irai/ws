@@ -17,10 +17,6 @@ var (
 	pingPeriod = 30 * time.Second
 )
 
-func init() {
-	go serverPingLoop()
-}
-
 // serverClose is called by the background reader goroutine when the ws fails or is closed.
 func (wsConn *WSConn) serverClose() {
 	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server close")
@@ -111,6 +107,7 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 
 	// Reset the map - restart many times in testing
 	webSocketMap = make(map[string]*WSConn, 128)
+	go serverPingLoop()
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -195,13 +192,17 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 
 func serverPingLoop() {
 
+	// The testing routines change the webSocketMap table during execution
+	// keep it in the stack
+	myTable := webSocketMap
+
 	for {
 		time.Sleep(pingPeriod)
 
 		wsMutex.Lock()
-		table := make([]*WSConn, len(webSocketMap))
+		table := make([]*WSConn, len(myTable))
 		var i int
-		for _, value := range webSocketMap {
+		for _, value := range myTable {
 			table[i] = value
 			i++
 		}
@@ -218,7 +219,8 @@ func serverPingLoop() {
 
 			if err != nil {
 				log.Println("WS server ping failed", err)
-				conn.serverClose()
+
+				conn.c.Close() // Wakeup the reader goroutine to handle the error
 			}
 		}
 	}
