@@ -192,12 +192,12 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 
 func serverPingLoop() {
 
-	// The testing routines change the webSocketMap table during execution
-	// keep it in the stack
-	myTable := webSocketMap
-
 	for {
 		time.Sleep(pingPeriod)
+
+		// The testing routines change the webSocketMap table during execution
+		// keep it in the stack
+		myTable := webSocketMap
 
 		wsMutex.Lock()
 		table := make([]*WSConn, len(myTable))
