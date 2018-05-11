@@ -213,6 +213,38 @@ func Test_ServerPingPong(t *testing.T) {
 	}
 }
 
+func Test_ServerPongFailure(t *testing.T) {
+	setAndSaveEnv(time.Millisecond*300, time.Millisecond*100)
+	defer resetEnv()
+
+	s := newServer(t)
+	defer s.Close()
+
+	countClosed = 0
+	AutoRedial = false
+	defer func() { AutoRedial = true }()
+
+	conn := dial(t, *s.url, "client1PINGPONG")
+	defer conn.Close()
+
+	time.Sleep(time.Second * 1)
+
+	if len(webSocketMap) != 1 {
+		t.Fatal("failed to pong ws ", len(webSocketMap))
+	}
+
+	conn.c.SetPingHandler(func(msg string) error {
+		log.Info("WS client PONG will fail")
+		return nil
+	})
+
+	time.Sleep(time.Second * 1)
+
+	if len(webSocketMap) != 0 {
+		t.Fatal("failed to close ws ", len(webSocketMap))
+	}
+}
+
 func Test_ServerPing(t *testing.T) {
 	setAndSaveEnv(time.Millisecond*300, time.Millisecond*100)
 	defer resetEnv()

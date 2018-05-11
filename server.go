@@ -237,7 +237,7 @@ func serverPingLoop() {
 			}
 
 			if conn.lastUpdated.Before(deadline) {
-				log.WithFields(log.Fields{"clientID": conn.ClientId}).Error("WS server pong timeout - closing ", err)
+				log.WithFields(log.Fields{"clientID": conn.ClientId}).Error("WS server pong timeout - closing ")
 				conn.c.Close() // Wakeup the reader goroutine to handle the error
 			}
 		}
