@@ -172,7 +172,15 @@ func (wsConn *WSConn) clientPingLoop() {
 	pingReceived := false
 	wsConn.c.SetPingHandler(func(msg string) error {
 		pingReceived = true
-		log.Info("PING recv")
+		log.Info("WS client PING recv")
+
+		// log.WithFields(log.Fields{"clientID": conn.ClientId}).Info("WS server pinging")
+		wsConn.writeMutex.Lock()
+		err := wsConn.c.WriteControl(websocket.PongMessage, []byte{}, time.Now().Add(writeWait))
+		wsConn.writeMutex.Unlock()
+		if err != nil {
+			log.Println("WS client failed to send PONG", err)
+		}
 		return nil
 	})
 

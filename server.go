@@ -50,6 +50,13 @@ func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) 
 
 	// wsConn.c.SetReadDeadline(time.Now().Add(writeWait))
 	// wsConn.c.SetReadDeadline(0)
+	wsConn.lastUpdated = time.Now()
+	wsConn.c.SetPongHandler(func(msg string) error {
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("PONG recv")
+
+		wsConn.lastUpdated = time.Now()
+		return nil
+	})
 
 	for {
 		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS Server read")
@@ -214,18 +221,23 @@ func serverPingLoop() {
 		}
 		wsMutex.Unlock()
 
-		var conn *WSConn
-		for i := range table {
-			conn = table[i]
+		deadline := time.Now().Add(pingPeriod * 2 * -1)
 
-			log.WithFields(log.Fields{"clientID": conn.ClientId}).Info("WS server pinging")
+		for i := range table {
+			conn := table[i]
+
+			// log.WithFields(log.Fields{"clientID": conn.ClientId}).Info("WS server pinging")
 			conn.writeMutex.Lock()
 			err := conn.c.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait))
 			conn.writeMutex.Unlock()
 
 			if err != nil {
-				log.Println("WS server ping failed", err)
+				log.WithFields(log.Fields{"clientID": conn.ClientId}).Error("WS server ping failed", err)
+				conn.c.Close() // Wakeup the reader goroutine to handle the error
+			}
 
+			if conn.lastUpdated.Before(deadline) {
+				log.WithFields(log.Fields{"clientID": conn.ClientId}).Error("WS server pong timeout - closing ", err)
 				conn.c.Close() // Wakeup the reader goroutine to handle the error
 			}
 		}

@@ -62,6 +62,7 @@ type WSConn struct {
 	callback    WSClient
 	msgSeq      uint8
 	closing     bool
+	lastUpdated time.Time
 }
 
 // WSMsg is a slice, so pass it by value to all
