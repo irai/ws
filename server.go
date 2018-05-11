@@ -182,7 +182,13 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 		webSocketMap[wsConn.ClientId] = wsConn
 		wsMutex.Unlock()
 
-		handler.Accept(wsConn)
+		if err = handler.Accept(wsConn); err != nil {
+			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server accept failed", err)
+			wsConn.closing = true
+			wsConn.c.Close()
+			wsConn.serverClose() // remove from map
+			return
+		}
 
 		// Create a goroutine to read each websocket. Not very efficient for high volume
 		go wsConn.serverReaderLoop(handler.Process)
