@@ -101,11 +101,14 @@ func encode(buf bytes.Buffer, seq uint8, msgType uint8, token *string, data inte
 	buf.WriteByte(seq)
 	buf.WriteByte(msgType)
 
+	enc := gob.NewEncoder(&buf)
+	if err = enc.Encode(token); err != nil {
+		log.Error("WS encode token error:", err)
+		return nil, err
+	}
+
 	if data != nil {
-		enc := gob.NewEncoder(&buf)
-		err1 := enc.Encode(token)
-		err = enc.Encode(data)
-		if err != nil || err1 != nil {
+		if err = enc.Encode(data); err != nil {
 			log.Error("WS encode error:", err)
 			return nil, err
 		}
@@ -126,10 +129,13 @@ func (w WSMsg) Decode(token *string, data interface{}) error {
 		log.Error("WS decode token error: ", err)
 		return err
 	}
-	err = dec.Decode(data)
-	if err != nil {
-		log.Error("WS decode error: ", err)
-		return err
+
+	if data != nil {
+		err = dec.Decode(data)
+		if err != nil {
+			log.Error("WS decode error: ", err)
+			return err
+		}
 	}
 	return nil
 }

@@ -154,7 +154,8 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 		response, err := process(wsConn.ClientId, msg)
 		if err != nil {
 			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS client process error")
-			return
+			wsConn.c.Close()
+			continue
 		}
 		if response.Type() != msgNoResponse {
 			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS client writing response ", response)
