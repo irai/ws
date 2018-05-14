@@ -170,9 +170,10 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 }
 
 func (wsConn *WSConn) clientPingLoop() {
-	pingReceived := false
+	wsConn.lastUpdated = time.Now()
+
 	wsConn.c.SetPingHandler(func(msg string) error {
-		pingReceived = true
+		wsConn.lastUpdated = time.Now()
 		log.Info("WS client PING recv")
 
 		// log.WithFields(log.Fields{"clientID": conn.ClientId}).Info("WS server pinging")
@@ -186,11 +187,10 @@ func (wsConn *WSConn) clientPingLoop() {
 	})
 
 	for {
-		pingReceived = false
-
 		time.Sleep(clientPingPeriod)
 
-		if !pingReceived {
+		deadline := time.Now().Add(clientPingPeriod * 2 * -1)
+		if wsConn.lastUpdated.Before(deadline) {
 			if !wsConn.closing {
 				log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Error("WS client PING failed")
 				wsConn.c.Close() // wakeup reader goroutine to handle the error
