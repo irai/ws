@@ -81,8 +81,12 @@ func (h TestServerWSHandler) Process(clientId string, msg WSMsg) (response WSMsg
 var countConnections = 0
 
 func (h TestServerWSHandler) Accept(wsConn *WSConn) error {
+	if strings.Contains(wsConn.ClientId, "error") {
+		log.Errorf("test accept %s error nconn %d mapn %d", wsConn.ClientId, countConnections, len(webSocketMap))
+		return base.ErrorInternal
+	}
 	countConnections++
-	log.Infof("test accept %s success nconn %d", wsConn.ClientId, countConnections)
+	log.Infof("test accept %s success nconn %d mapn %d", wsConn.ClientId, countConnections, len(webSocketMap))
 	return nil
 }
 
@@ -298,6 +302,21 @@ func Test_ServerDupClient(t *testing.T) {
 
 	time.Sleep(time.Second * 1)
 	if len(webSocketMap) != 2 {
+		t.Fatal("wrong total at end", len(webSocketMap), countConnections)
+	}
+}
+
+func Test_ServerConnError(t *testing.T) {
+	// AutoRedial = false
+	// defer func() { AutoRedial = true }()
+
+	setupServer(t)
+
+	if _, err := WebSocketDial(*serverHandler.url, "client1_error", TestClientWSHandler{}); err == nil {
+		t.Fatalf("Dial: %v", err)
+	}
+
+	if len(webSocketMap) != 0 {
 		t.Fatal("wrong total at end", len(webSocketMap), countConnections)
 	}
 }

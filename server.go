@@ -155,22 +155,6 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 			return
 		}
 
-		// send OK response back
-		msg, err = EncodeResponse(msg, nil)
-		if err != nil {
-			log.Error("WS server could not encode auth ack ", err)
-			wsConn.Close()
-			return
-		}
-
-		// log.Info("Server authentication response")
-		_, err = wsConn.Write(msg)
-		if err != nil {
-			log.Error("WS server could not respond: ", err)
-			wsConn.Close()
-			return
-		}
-
 		log.WithFields(log.Fields{"clientID": wsConn.ClientId, "public_ip": wsConn.RemoteIP}).Info("WS server new websocket connection")
 
 		// Add WS to active list
@@ -197,10 +181,48 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 			return
 		}
 
+		// send OK response back
+		msg, err = EncodeResponse(msg, nil)
+		if err != nil {
+			log.Error("WS server could not encode auth ack ", err)
+			wsConn.Close()
+			return
+		}
+
+		// log.Info("Server authentication response")
+		_, err = wsConn.Write(msg)
+		if err != nil {
+			log.Error("WS server could not respond: ", err)
+			wsConn.Close()
+			return
+		}
+
 		// Create a goroutine to read each websocket. Not very efficient for high volume
 		go wsConn.serverReaderLoop(handler.Process)
-
 	})
+}
+
+func (wsConn *WSConn) ServerConnIsAlive() bool {
+	previousUpdate := wsConn.lastUpdated
+
+	wsConn.writeMutex.Lock()
+	err := wsConn.c.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait))
+	wsConn.writeMutex.Unlock()
+
+	if err != nil {
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server ping failed", err)
+		return false
+	}
+
+	// 3 seconds should be enough to update ping
+	time.Sleep(time.Second * 3)
+
+	if wsConn.lastUpdated.After(previousUpdate) {
+		return true
+	}
+
+	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server conn is not responding ", err)
+	return false
 }
 
 func serverPingLoop() {
