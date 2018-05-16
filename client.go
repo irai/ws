@@ -129,6 +129,7 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 			if err != base.ErrorClosed && !wsConn.closing {
 				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS client failed to read websocket message", err)
 				if AutoRedial {
+					// wsConn.c.Close() // close the underlying WS; this will stop ping goroutine.
 					wsConn.redialLoop()
 					continue
 				}
@@ -172,13 +173,16 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 func (wsConn *WSConn) clientPingLoop() {
 	wsConn.lastUpdated = time.Now()
 
-	wsConn.c.SetPingHandler(func(msg string) error {
+	// Important: Keep a copy of wsConn.c; wsConn.c will change during redial
+	conn := wsConn.c
+
+	conn.SetPingHandler(func(msg string) error {
 		wsConn.lastUpdated = time.Now()
 		log.Info("WS client PING recv")
 
 		// log.WithFields(log.Fields{"clientID": conn.ClientId}).Info("WS server pinging")
 		wsConn.writeMutex.Lock()
-		err := wsConn.c.WriteControl(websocket.PongMessage, []byte{}, time.Now().Add(writeWait))
+		err := conn.WriteControl(websocket.PongMessage, []byte{}, time.Now().Add(writeWait))
 		wsConn.writeMutex.Unlock()
 		if err != nil {
 			log.Println("WS client failed to send PONG", err)
@@ -193,7 +197,7 @@ func (wsConn *WSConn) clientPingLoop() {
 		if wsConn.lastUpdated.Before(deadline) {
 			if !wsConn.closing {
 				log.WithFields(log.Fields{"clientid": wsConn.ClientId}).Error("WS client PING failed")
-				wsConn.c.Close() // wakeup reader goroutine to handle the error
+				conn.Close() // wakeup reader goroutine to handle the error
 			}
 			return
 		}
