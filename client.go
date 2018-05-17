@@ -139,6 +139,7 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 		}
 
 		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS client ", msg)
+
 		// If response, there will be a goroutine waiting
 		if msg.IsResponse() {
 			if channelIsClosed(wsConn.readChannel) {
@@ -158,12 +159,13 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 			wsConn.c.Close()
 			continue
 		}
+
 		if response.Type() != msgNoResponse {
 			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS client writing response ", response)
 			_, err := wsConn.Write(response)
 			if err != nil {
-				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server error in response")
-				return
+				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS client error in response")
+				continue
 			}
 		}
 	}
