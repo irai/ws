@@ -17,13 +17,20 @@ var (
 	pingPeriod = 30 * time.Second
 )
 
-// serverClose is called by the background reader goroutine when the ws fails or is closed.
+// serverClose is called by the background reader or ping goroutine when the ws fails or is closed.
 func (wsConn *WSConn) serverClose() {
 	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server close")
 
-	// check close was not initiated normally by another goroutine.
 	wsConn.writeMutex.Lock()
-	closing := wsConn.closing
+
+	// check close was not initiated normally by another goroutine.
+	// if it was not closing normally, then cleanup
+	if wsConn.closing {
+		wsConn.writeMutex.Unlock()
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server close - duplicated")
+		return
+	}
+
 	wsConn.closing = true
 	wsConn.writeMutex.Unlock()
 
@@ -31,17 +38,15 @@ func (wsConn *WSConn) serverClose() {
 	// ONLY if the WS has not restablished for the same device ID name
 	wsMutex.Lock()
 	ws := webSocketMap[wsConn.ClientId]
-	if ws == wsConn {
-		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server deleting websocket map")
-		delete(webSocketMap, wsConn.ClientId)
+	if ws != wsConn {
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server invalid websocket map")
 	}
+
+	delete(webSocketMap, wsConn.ClientId)
 	wsMutex.Unlock()
 
-	// if it was not closing normally, then cleanup
-	if !closing {
-		wsConn.c.Close()
-		wsConn.callback.Closed(wsConn)
-	}
+	wsConn.c.Close()
+	wsConn.callback.Closed(wsConn)
 }
 
 func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) (response WSMsg, err error)) {
@@ -255,12 +260,14 @@ func serverPingLoop() {
 
 			if err != nil {
 				log.WithFields(log.Fields{"clientID": conn.ClientId}).Error("WS server ping failed", err)
-				conn.c.Close() // Wakeup the reader goroutine to handle the error
+				conn.serverClose() // Close and wakeup the reader goroutine to handle the error
+				continue
 			}
 
 			if conn.lastUpdated.Before(deadline) {
 				log.WithFields(log.Fields{"clientID": conn.ClientId}).Error("WS server pong timeout - closing ")
-				conn.c.Close() // Wakeup the reader goroutine to handle the error
+				conn.serverClose() // Close and wakeup the reader goroutine to handle the error
+				continue
 			}
 		}
 	}
