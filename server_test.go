@@ -316,6 +316,8 @@ func Test_ServerConnError(t *testing.T) {
 		t.Fatalf("Dial: %v", err)
 	}
 
+	time.Sleep(time.Millisecond * 500)
+
 	if len(webSocketMap) != 0 {
 		t.Fatal("wrong total at end", len(webSocketMap), countConnections)
 	}

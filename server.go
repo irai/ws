@@ -86,7 +86,7 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server accept failed", err)
 			wsConn.closing = true
 			wsConn.c.Close()
-			wsConn.serverClose() // remove from map
+			delete(webSocketMap, wsConn.ClientId)
 			return
 		}
 
@@ -94,7 +94,7 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 		msg, err = EncodeResponse(msg, nil)
 		if err != nil {
 			log.Error("WS server could not encode auth ack ", err)
-			wsConn.Close()
+			wsConn.serverClose()
 			return
 		}
 
@@ -102,7 +102,7 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 		_, err = wsConn.Write(msg)
 		if err != nil {
 			log.Error("WS server could not respond: ", err)
-			wsConn.Close()
+			wsConn.serverClose()
 			return
 		}
 
