@@ -17,102 +17,6 @@ var (
 	pingPeriod = 30 * time.Second
 )
 
-// serverClose is called by the background reader or ping goroutine when the ws fails or is closed.
-func (wsConn *WSConn) serverClose() {
-	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server close")
-
-	wsConn.writeMutex.Lock()
-
-	// check close was not initiated normally by another goroutine.
-	// if it was not closing normally, then cleanup
-	if wsConn.closing {
-		wsConn.writeMutex.Unlock()
-		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server close - duplicated")
-		return
-	}
-
-	wsConn.closing = true
-	wsConn.writeMutex.Unlock()
-
-	// Delete entry from online table
-	// ONLY if the WS has not restablished for the same device ID name
-	wsMutex.Lock()
-	ws := webSocketMap[wsConn.ClientId]
-	if ws != wsConn {
-		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server invalid websocket map")
-	}
-
-	delete(webSocketMap, wsConn.ClientId)
-	wsMutex.Unlock()
-
-	wsConn.c.Close()
-	wsConn.callback.Closed(wsConn)
-}
-
-func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) (response WSMsg, err error)) {
-	defer log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server reader goroutine ended")
-	defer wsConn.serverClose()
-
-	// wsConn.c.SetReadDeadline(time.Now().Add(writeWait))
-	// wsConn.c.SetReadDeadline(0)
-	wsConn.lastUpdated = time.Now()
-	wsConn.c.SetPongHandler(func(msg string) error {
-		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("PONG recv")
-
-		wsConn.lastUpdated = time.Now()
-		return nil
-	})
-
-	for {
-		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS Server read")
-		msg, err := wsConn.read()
-		if err != nil {
-			if err != base.ErrorClosed && !wsConn.closing { // normal closure and not closing
-				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server failed to read websocket message", err)
-			}
-			return
-		}
-
-		// If response, there will be a goroutine waiting
-		if msg.IsResponse() {
-			if channelIsClosed(wsConn.readChannel) {
-				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server channel is closed")
-				return
-			}
-
-			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Infof("WS server got response type %v len %v", msg.Type(), len(msg))
-			wsConn.readChannel <- msg
-			continue
-		}
-
-		switch msg.Type() {
-		case msgAuthentication:
-			log.Error("websocket Unexpected authentication message")
-
-		default:
-			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Infof("WS server process msg seq %v type %v len %v",
-				msg.Sequence(), msg.Type(), len(msg))
-			response, err := process(wsConn.ClientId, msg)
-			// log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS server process response", err, response)
-			if err != nil || response == nil {
-				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Errorf("WS server process error seq %v type %v len %v",
-					msg.Sequence(), msg.Type(), len(msg))
-				return
-			}
-			if response.Type() != msgNoResponse {
-				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Infof("WS server process response seq %v type %v len %v",
-					response.Sequence(), response.Type(), len(response))
-				_, err := wsConn.Write(response)
-				if err != nil {
-					log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server error in response")
-					return
-				}
-			}
-		}
-	}
-
-}
-
 var upgrader = websocket.Upgrader{}
 
 func WebSocketHandler(handler WSServer) http.HandlerFunc {
@@ -205,6 +109,102 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 		// Create a goroutine to read each websocket. Not very efficient for high volume
 		go wsConn.serverReaderLoop(handler.Process)
 	})
+}
+
+// serverClose is called by the background reader or ping goroutine when the ws fails or is closed.
+func (wsConn *WSConn) serverClose() {
+
+	wsConn.writeMutex.Lock()
+
+	// check close was not initiated normally by another goroutine.
+	// if it was not closing normally, then cleanup
+	if wsConn.closing {
+		wsConn.writeMutex.Unlock()
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server close - duplicated")
+		return
+	}
+
+	wsConn.closing = true
+	wsConn.writeMutex.Unlock()
+	log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server close")
+
+	// Delete entry from online table
+	// ONLY if the WS has not restablished for the same device ID name
+	wsMutex.Lock()
+	ws := webSocketMap[wsConn.ClientId]
+	if ws != wsConn {
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server invalid websocket map")
+	}
+
+	delete(webSocketMap, wsConn.ClientId)
+	wsMutex.Unlock()
+
+	wsConn.c.Close()
+	wsConn.callback.Closed(wsConn)
+}
+
+func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) (response WSMsg, err error)) {
+	defer log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server reader goroutine ended")
+	defer wsConn.serverClose()
+
+	// wsConn.c.SetReadDeadline(time.Now().Add(writeWait))
+	// wsConn.c.SetReadDeadline(0)
+	wsConn.lastUpdated = time.Now()
+	wsConn.c.SetPongHandler(func(msg string) error {
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("PONG recv")
+
+		wsConn.lastUpdated = time.Now()
+		return nil
+	})
+
+	for {
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS Server read")
+		msg, err := wsConn.read()
+		if err != nil {
+			if err != base.ErrorClosed && !wsConn.closing { // normal closure and not closing
+				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server failed to read websocket message", err)
+			}
+			return
+		}
+
+		// If response, there will be a goroutine waiting
+		if msg.IsResponse() {
+			if channelIsClosed(wsConn.readChannel) {
+				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server channel is closed")
+				return
+			}
+
+			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Infof("WS server got response type %v len %v", msg.Type(), len(msg))
+			wsConn.readChannel <- msg
+			continue
+		}
+
+		switch msg.Type() {
+		case msgAuthentication:
+			log.Error("websocket Unexpected authentication message")
+
+		default:
+			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Infof("WS server process msg seq %v type %v len %v",
+				msg.Sequence(), msg.Type(), len(msg))
+			response, err := process(wsConn.ClientId, msg)
+			// log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS server process response", err, response)
+			if err != nil || response == nil {
+				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Errorf("WS server process error seq %v type %v len %v",
+					msg.Sequence(), msg.Type(), len(msg))
+				return
+			}
+			if response.Type() != msgNoResponse {
+				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Infof("WS server process response seq %v type %v len %v",
+					response.Sequence(), response.Type(), len(response))
+				_, err := wsConn.Write(response)
+				if err != nil {
+					log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server error in response")
+					return
+				}
+			}
+		}
+	}
+
 }
 
 func (wsConn *WSConn) ServerConnIsAlive() bool {

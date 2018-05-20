@@ -186,7 +186,7 @@ func Test_ServerAccept(t *testing.T) {
 	}
 }
 
-func Test_ServerPingPong(t *testing.T) {
+func Test_ServerPingPongNormal(t *testing.T) {
 	setAndSaveEnv(time.Millisecond*300, time.Millisecond*100)
 	defer resetEnv()
 
@@ -228,7 +228,7 @@ func Test_ServerPongFailure(t *testing.T) {
 	AutoRedial = false
 	defer func() { AutoRedial = true }()
 
-	conn := dial(t, *s.url, "client1PINGPONG")
+	conn := dial(t, *s.url, "client1PONGFailure")
 	defer conn.Close()
 
 	time.Sleep(time.Second * 1)
@@ -249,7 +249,7 @@ func Test_ServerPongFailure(t *testing.T) {
 	}
 }
 
-func Test_ServerPing(t *testing.T) {
+func Test_ServerPingRedial(t *testing.T) {
 	setAndSaveEnv(time.Millisecond*300, time.Millisecond*100)
 	defer resetEnv()
 
