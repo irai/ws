@@ -215,7 +215,7 @@ func (wsConn *WSConn) ServerConnIsAlive() bool {
 	wsConn.writeMutex.Unlock()
 
 	if err != nil {
-		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server ping failed", err)
+		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server is alive failed", err)
 		return false
 	}
 
@@ -259,7 +259,7 @@ func serverPingLoop() {
 			conn.writeMutex.Unlock()
 
 			if err != nil {
-				log.WithFields(log.Fields{"clientID": conn.ClientId}).Error("WS server ping failed", err)
+				log.WithFields(log.Fields{"clientID": conn.ClientId}).Error("WS server ping failed ", err)
 				conn.serverClose() // Close and wakeup the reader goroutine to handle the error
 				continue
 			}

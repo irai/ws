@@ -87,7 +87,7 @@ func Test_ClientNormalClosure(t *testing.T) {
 
 	time.Sleep(time.Second * 2)
 
-	if countClosed != 0 {
+	if countClosed != 3 {
 		t.Fatal("failed to close ws ", countClosed)
 	}
 }

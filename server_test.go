@@ -322,3 +322,33 @@ func Test_ServerConnError(t *testing.T) {
 		t.Fatal("wrong total at end", len(webSocketMap), countConnections)
 	}
 }
+
+func Test_ServerNormalClose(t *testing.T) {
+	AutoRedial = false
+	defer func() { AutoRedial = true }()
+
+	setupServer(t)
+	clientid := "firstIP"
+
+	if _, err := WebSocketDial(*serverHandler.url, clientid, TestClientWSHandler{}); err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+
+	serverConn := GetWebSocketByClientId(clientid)
+	if serverConn == nil {
+		t.Fatalf("No serverconn: ")
+	}
+
+	serverConn.Close() // simulate normal closure of previous IP
+
+	time.Sleep(time.Millisecond * 100)
+
+	serverConn = GetWebSocketByClientId(clientid)
+	if serverConn != nil {
+		t.Fatalf("Invalid serverconn: ")
+	}
+
+	if len(webSocketMap) != 0 {
+		t.Fatal("wrong total at end", len(webSocketMap), countConnections)
+	}
+}
