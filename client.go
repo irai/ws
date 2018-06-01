@@ -62,19 +62,22 @@ func (wsConn *WSConn) redialLoop() {
 // Close will terminate the connection with the remote peer. This is the normal scenario.
 // This informs the peer of a normal closure.
 func (wsConn *WSConn) Close() {
-	log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS close normal")
 
 	wsConn.writeMutex.Lock()
 	defer wsConn.writeMutex.Unlock()
 
 	if !wsConn.closing {
+		log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS close normal")
 		// wsConn.closing = true
 		wsConn.c.SetWriteDeadline(time.Now().Add(writeWait))
 		wsConn.c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		time.Sleep(closeGracePeriod)
 
 		wsConn.c.Close()
+		return
 	}
+
+	log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS close already in progress")
 }
 
 // clientClose is invoked by the background reader goroutine when the ws fails or is closed.
