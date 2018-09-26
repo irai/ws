@@ -296,7 +296,7 @@ func GetWebSocketByRemoteIP(ip net.IP) (wsConn *WSConn) {
 
 		// Return loopback wsConn if this is the local api server
 		if wsConn.RemoteIP.Equal(net.IPv6loopback) && len(webSocketMap) == 1 {
-			log.Warnf("CMD found localhost websocket for ip ", ip)
+			log.Warnf("CMD found localhost websocket for ip %s ", ip)
 			return wsConn
 		}
 	}
