@@ -5,7 +5,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"net"
 	"net/http"
-	"spinifex/base"
+	"strings"
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -30,13 +31,13 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 		var err error
 		// device.DeviceId = deviceId
 		wsConn := &WSConn{}
-		wsConn.RemoteIP = net.ParseIP(base.HTTPGetSrcIP(r))
+		wsConn.RemoteIP = net.ParseIP(httpGetSrcIP(r))
 		log.WithFields(log.Fields{"public_ip": wsConn.RemoteIP}).Debug("WS server new websocket")
 
 		wsConn.c, err = upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Error("WS server upgrade:", err)
-			base.SendHttpSpxError(w, http.StatusBadRequest, base.ErrorJWTInvalid.AddError(err))
+			sendHttpSpxError(w, http.StatusBadRequest, ErrorJWTInvalid.AddError(err))
 			return
 		}
 
@@ -161,7 +162,7 @@ func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) 
 		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS Server read")
 		msg, err := wsConn.read()
 		if err != nil {
-			if err != base.ErrorClosed && !wsConn.closing { // normal closure and not closing
+			if err != ErrorClosed && !wsConn.closing { // normal closure and not closing
 				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server failed to read websocket message", err)
 			}
 			return
@@ -304,4 +305,55 @@ func GetWebSocketByRemoteIP(ip net.IP) (wsConn *WSConn) {
 	log.Info("websocketMap ", webSocketMap)
 
 	return nil
+}
+
+func httpGetSrcIP(req *http.Request) string {
+
+	ip, port, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		return ""
+	}
+
+	userIP := net.ParseIP(ip)
+	if userIP == nil {
+		return ""
+	}
+
+	// This will only be defined when site is accessed via non-anonymous proxy
+	// and takes precedence over RemoteAddr
+	// Header.Get is case-insensitive
+	// This is a list like "192.168.0.1, 201.123.12.8"
+	ipList := req.Header.Get("X-Forwarded-For")
+	log.Infof("controller IP %s port %v  x-forwarded-for %s", ip, port, ipList)
+
+	if ipList != "" {
+		tmp := strings.Split(ipList, ",")
+		if len(tmp) > 0 {
+			forward := strings.TrimSpace(tmp[len(tmp)-1]) // get last IP in list
+			if net.ParseIP(forward) != nil {
+				ip = forward
+			}
+		}
+	}
+
+	return ip
+}
+
+func sendHttpSpxError(w http.ResponseWriter, httpStatusCode int, err error) {
+	var spxError SpxError
+
+	spxError, ok := err.(SpxError)
+	if ok == false {
+		spxError = SpxError{Code: ErrorInternal.Code, Text: "unknown error", Detail: err.Error()}
+	}
+
+	w.WriteHeader(httpStatusCode)
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+
+	log.WithFields(log.Fields{"code": spxError.Code, "detail": spxError.Detail, "text": spxError.Text}).Info("SendHttpSpxError")
+
+	err = json.NewEncoder(w).Encode(spxError)
+	if err != nil {
+		log.Error("Failed to return SpxError struct", err)
+	}
 }

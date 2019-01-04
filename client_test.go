@@ -4,7 +4,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"net/url"
 	// "net/url"
-	"spinifex/base"
 	"testing"
 	"time"
 )
@@ -134,7 +133,7 @@ func Test_ClientRedial(t *testing.T) {
 	}
 
 	err = conn.RPC(testTimeout, &msgToken, &in, &out)
-	if err == nil || err != base.ErrorTimeout {
+	if err == nil || err != ErrorTimeout {
 		t.Fatal("cannot rpc timeout", err)
 	}
 

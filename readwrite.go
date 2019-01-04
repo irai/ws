@@ -9,7 +9,6 @@ import (
 	// "encoding/gob"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
-	"spinifex/base"
 	"time"
 )
 
@@ -26,7 +25,7 @@ func channelIsClosed(ch <-chan WSMsg) bool {
 func (wsConn *WSConn) WaitResponse(timeout time.Duration) (msg WSMsg, err error) {
 	// if channelIsClosed(wsConn.readChannel) {
 	// log.Errorf("WS wait channel is closed")
-	// return WSMsg{}, base.ErrorInternal
+	// return WSMsg{}, ErrorInternal
 	// }
 	select {
 	case msg := <-wsConn.readChannel:
@@ -36,13 +35,11 @@ func (wsConn *WSConn) WaitResponse(timeout time.Duration) (msg WSMsg, err error)
 		log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Error("WS wait timed out")
 		// close(wsConn.readChannel)
 		wsConn.c.Close() // force readerLoop to exit and redial
-		return WSMsg{}, base.ErrorTimeout
+		return WSMsg{}, ErrorTimeout
 
 		// default:
 	}
 
-	log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Error("WS wait internal")
-	return WSMsg{}, base.ErrorInternal
 }
 
 func (wsConn *WSConn) read() (msg WSMsg, err error) {
@@ -56,14 +53,14 @@ func (wsConn *WSConn) read() (msg WSMsg, err error) {
 
 	if err != nil {
 		if e, ok := err.(*websocket.CloseError); ok && e.Code == websocket.CloseNormalClosure {
-			return nil, base.ErrorClosed
+			return nil, ErrorClosed
 		}
 		return nil, err
 	}
 
 	if len(packet) < 2 {
 		log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Error("WS invalid msg", packet)
-		return nil, base.ErrorInvalidRequest
+		return nil, ErrorInvalidRequest
 	}
 
 	msg = WSMsg(packet)
@@ -126,7 +123,7 @@ func (wsConn *WSConn) WriteAndWaitResponse(msg WSMsg) (response WSMsg, err error
 	}
 	if seq != response.Sequence() {
 		log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Error("WS unexpected sequence: ")
-		return WSMsg{}, base.ErrorInternal
+		return WSMsg{}, ErrorInternal
 
 	}
 	// log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS received response ", response)

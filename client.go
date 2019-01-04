@@ -4,7 +4,6 @@ import (
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"net/url"
-	"spinifex/base"
 	"time"
 )
 
@@ -129,7 +128,7 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 		msg, err := wsConn.read()
 		if err != nil {
 			// abnormal closure & not closing
-			if err != base.ErrorClosed && !wsConn.closing {
+			if err != ErrorClosed && !wsConn.closing {
 				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS client failed to read websocket message", err)
 				if AutoRedial {
 					// wsConn.c.Close() // close the underlying WS; this will stop ping goroutine.

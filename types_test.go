@@ -39,7 +39,7 @@ func Test_EncodeDecode(t *testing.T) {
 		msg.Sequence() != data2.msgSeq ||
 		data1.ClientId != data2.ClientId ||
 		msg.Type() != 5 || msg2.Type() != 8 {
-		log.Fatal("values don't match ", data1, data2)
+		log.Fatal("values don't match ")
 
 	}
 
@@ -62,7 +62,7 @@ func Test_StringEncodeDecode(t *testing.T) {
 	}
 
 	if a != b || token != secret {
-		log.Fatal("values don't match ", data1, data2)
+		log.Fatal("values don't match ")
 	}
 
 }

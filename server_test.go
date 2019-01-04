@@ -6,7 +6,6 @@ import (
 	"net/url"
 	// "net/url"
 	"fmt"
-	"spinifex/base"
 	"strings"
 	"testing"
 	"time"
@@ -69,7 +68,7 @@ func (h TestServerWSHandler) Process(clientId string, msg WSMsg) (response WSMsg
 		return response, nil
 
 	case testAbruptClose:
-		return NoResponse, base.ErrorClosed
+		return NoResponse, ErrorClosed
 
 	case testTimeout, testNoResponse:
 		return NoResponse, nil
@@ -83,7 +82,7 @@ var countConnections = 0
 func (h TestServerWSHandler) Accept(wsConn *WSConn) error {
 	if strings.Contains(wsConn.ClientId, "error") {
 		log.Errorf("test accept %s error nconn %d mapn %d", wsConn.ClientId, countConnections, len(webSocketMap))
-		return base.ErrorInternal
+		return ErrorInternal
 	}
 	countConnections++
 	log.Infof("test accept %s success nconn %d mapn %d", wsConn.ClientId, countConnections, len(webSocketMap))
