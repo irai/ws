@@ -34,6 +34,7 @@ var (
 	ErrorInternal       = SpxError{999, "unexpected error", "internal error"}
 )
 
+// TODO: Adderror should return a new error with the added extension
 func (e SpxError) AddError(err error) SpxError {
 	e.Detail = e.Detail + "; " + err.Error()
 	return e
