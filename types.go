@@ -2,7 +2,7 @@ package ws
 
 import (
 	"bytes"
-	"encoding/gob"
+	"encoding/json"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"net"
@@ -101,7 +101,7 @@ func encode(buf bytes.Buffer, seq uint8, msgType uint8, token *string, data inte
 	buf.WriteByte(seq)
 	buf.WriteByte(msgType)
 
-	enc := gob.NewEncoder(&buf)
+	enc := json.NewEncoder(&buf)
 	if err = enc.Encode(token); err != nil {
 		log.Error("WS encode token error:", err)
 		return nil, err
@@ -109,7 +109,7 @@ func encode(buf bytes.Buffer, seq uint8, msgType uint8, token *string, data inte
 
 	if data != nil {
 		if err = enc.Encode(data); err != nil {
-			log.Error("WS encode error:", err)
+			log.Error("WS json encode error:", err)
 			return nil, err
 		}
 	}
@@ -120,20 +120,19 @@ func encode(buf bytes.Buffer, seq uint8, msgType uint8, token *string, data inte
 
 func (w WSMsg) Decode(token *string, data interface{}) error {
 	empty := ""
-	dec := gob.NewDecoder(bytes.NewBuffer(w[2:]))
+	dec := json.NewDecoder(bytes.NewBuffer(w[2:]))
 	if token == nil { // caller is not interested in token
 		token = &empty
 	}
-	err := dec.Decode(&token)
-	if err != nil {
+
+	if err := dec.Decode(&token); err != nil {
 		log.Error("WS decode token error: ", err)
 		return err
 	}
 
 	if data != nil {
-		err = dec.Decode(data)
-		if err != nil {
-			log.Error("WS decode error: ", err)
+		if err := dec.Decode(data); err != nil {
+			log.Error("WS data decode error: ", err)
 			return err
 		}
 	}
