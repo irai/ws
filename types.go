@@ -3,12 +3,13 @@ package ws
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/gorilla/websocket"
-	log "github.com/sirupsen/logrus"
 	"net"
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -80,19 +81,26 @@ func (w WSMsg) IsResponse() bool {
 	}
 }
 
+//Encode will add the data struct to the msg; It uses json encoding
 func Encode(msgType uint8, token *string, data interface{}) (msg WSMsg, err error) {
 	var buf bytes.Buffer
-	return encode(buf, msgSeqNew, msgType, token, data)
+	return encode(false, buf, msgSeqNew, msgType, token, data)
+}
+
+// EncodeBytes will add the raw []byte to the msg
+func EncodeBytes(msgType uint8, token *string, data []byte) (msg WSMsg, err error) {
+	var buf bytes.Buffer
+	return encode(true, buf, msgSeqNew, msgType, token, data)
 }
 
 //EncodeResponse will reuse previous message
 func EncodeResponse(old WSMsg, data interface{}) (msg WSMsg, err error) {
 	buf := bytes.NewBuffer(old)
 	buf.Reset()
-	return encode(*buf, old.Sequence()|msgSeqResponse, old.Type(), nil, data)
+	return encode(false, *buf, old.Sequence()|msgSeqResponse, old.Type(), nil, data)
 }
 
-func encode(buf bytes.Buffer, seq uint8, msgType uint8, token *string, data interface{}) (msg WSMsg, err error) {
+func encode(raw bool, buf bytes.Buffer, seq uint8, msgType uint8, token *string, data interface{}) (msg WSMsg, err error) {
 	if token == nil {
 		var noToken = ""
 		token = &noToken
@@ -108,9 +116,14 @@ func encode(buf bytes.Buffer, seq uint8, msgType uint8, token *string, data inte
 	}
 
 	if data != nil {
-		if err = enc.Encode(data); err != nil {
-			log.Error("WS json encode error:", err)
-			return nil, err
+		if raw {
+			buf.Write(data.([]byte))
+			// log.Info("using []byte with no encoding", buf.Bytes())
+		} else {
+			if err = enc.Encode(data); err != nil {
+				log.Error("WS json encode error:", err)
+				return nil, err
+			}
 		}
 	}
 
@@ -131,8 +144,8 @@ func (w WSMsg) Decode(token *string, data interface{}) error {
 	}
 
 	if data != nil {
-		if err := dec.Decode(data); err != nil {
-			log.Error("WS data decode error: ", err)
+		if err := dec.Decode(data); err != nil && err.Error() != "EOF" {
+			log.Error("WS data decode error: ", err, w)
 			return err
 		}
 	}
