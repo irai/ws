@@ -2,13 +2,14 @@ package ws
 
 import (
 	"bytes"
-	"encoding/gob"
-	"github.com/gorilla/websocket"
-	log "github.com/sirupsen/logrus"
+	"encoding/json"
 	"net"
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -80,19 +81,26 @@ func (w WSMsg) IsResponse() bool {
 	}
 }
 
+//Encode will add the data struct to the msg; It uses json encoding
 func Encode(msgType uint8, token *string, data interface{}) (msg WSMsg, err error) {
 	var buf bytes.Buffer
-	return encode(buf, msgSeqNew, msgType, token, data)
+	return encode(false, buf, msgSeqNew, msgType, token, data)
+}
+
+// EncodeBytes will add the raw []byte to the msg
+func EncodeBytes(msgType uint8, token *string, data []byte) (msg WSMsg, err error) {
+	var buf bytes.Buffer
+	return encode(true, buf, msgSeqNew, msgType, token, data)
 }
 
 //EncodeResponse will reuse previous message
 func EncodeResponse(old WSMsg, data interface{}) (msg WSMsg, err error) {
 	buf := bytes.NewBuffer(old)
 	buf.Reset()
-	return encode(*buf, old.Sequence()|msgSeqResponse, old.Type(), nil, data)
+	return encode(false, *buf, old.Sequence()|msgSeqResponse, old.Type(), nil, data)
 }
 
-func encode(buf bytes.Buffer, seq uint8, msgType uint8, token *string, data interface{}) (msg WSMsg, err error) {
+func encode(raw bool, buf bytes.Buffer, seq uint8, msgType uint8, token *string, data interface{}) (msg WSMsg, err error) {
 	if token == nil {
 		var noToken = ""
 		token = &noToken
@@ -101,16 +109,21 @@ func encode(buf bytes.Buffer, seq uint8, msgType uint8, token *string, data inte
 	buf.WriteByte(seq)
 	buf.WriteByte(msgType)
 
-	enc := gob.NewEncoder(&buf)
+	enc := json.NewEncoder(&buf)
 	if err = enc.Encode(token); err != nil {
 		log.Error("WS encode token error:", err)
 		return nil, err
 	}
 
 	if data != nil {
-		if err = enc.Encode(data); err != nil {
-			log.Error("WS encode error:", err)
-			return nil, err
+		if raw {
+			buf.Write(data.([]byte))
+			// log.Info("using []byte with no encoding", buf.Bytes())
+		} else {
+			if err = enc.Encode(data); err != nil {
+				log.Error("WS json encode error:", err)
+				return nil, err
+			}
 		}
 	}
 
@@ -120,20 +133,19 @@ func encode(buf bytes.Buffer, seq uint8, msgType uint8, token *string, data inte
 
 func (w WSMsg) Decode(token *string, data interface{}) error {
 	empty := ""
-	dec := gob.NewDecoder(bytes.NewBuffer(w[2:]))
+	dec := json.NewDecoder(bytes.NewBuffer(w[2:]))
 	if token == nil { // caller is not interested in token
 		token = &empty
 	}
-	err := dec.Decode(&token)
-	if err != nil {
+
+	if err := dec.Decode(&token); err != nil {
 		log.Error("WS decode token error: ", err)
 		return err
 	}
 
 	if data != nil {
-		err = dec.Decode(data)
-		if err != nil {
-			log.Error("WS decode error: ", err)
+		if err := dec.Decode(data); err != nil && err.Error() != "EOF" {
+			log.Error("WS data decode error: ", err, w)
 			return err
 		}
 	}

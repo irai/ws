@@ -286,9 +286,9 @@ func Test_ServerDupClient(t *testing.T) {
 
 	setupServer(t)
 
-	conn1 := dial(t, *serverHandler.url, "client1DUP")
+	conn1 := dial(t, *serverHandler.url, "client1Duplicate")
 	defer conn1.Close()
-	conn2 := dial(t, *serverHandler.url, "client2DUP")
+	conn2 := dial(t, *serverHandler.url, "client2Duplicate")
 	defer conn2.Close()
 
 	// time.Sleep(time.Second * 1)
@@ -296,7 +296,7 @@ func Test_ServerDupClient(t *testing.T) {
 		t.Fatal("wrong total", len(webSocketMap), countConnections)
 	}
 
-	conn3 := dial(t, *serverHandler.url, "client1DUP")
+	conn3 := dial(t, *serverHandler.url, "client1Duplicate")
 	defer conn3.Close()
 
 	time.Sleep(time.Second * 1)
