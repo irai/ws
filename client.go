@@ -50,7 +50,6 @@ func (wsConn *WSConn) redialLoop() {
 				wsConn.c = conn
 				go wsConn.clientPingLoop()
 				log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS client redial successful ")
-				wsConn.callback.AfterRedial(wsConn)
 				return
 			}
 			conn.Close()
@@ -140,6 +139,9 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 				if AutoRedial {
 					// wsConn.c.Close() // close the underlying WS; this will stop ping goroutine.
 					wsConn.redialLoop()
+
+					// Run this call back in a goroutine because THIS reader loop must be running to receive responses.
+					go wsConn.callback.AfterRedial(wsConn)
 					continue
 				}
 			}
