@@ -1,8 +1,10 @@
 package ws
 
 import (
-	log "github.com/sirupsen/logrus"
 	"net/url"
+
+	log "github.com/sirupsen/logrus"
+
 	// "net/url"
 	"testing"
 	"time"
@@ -11,6 +13,7 @@ import (
 // TestServerWSHandler implement the handler interface
 type TestClientWSHandler struct {
 	clientId string
+	WSClient
 }
 
 func (h TestClientWSHandler) Process(clientId string, msg WSMsg) (response WSMsg, err error) {
@@ -33,10 +36,16 @@ func (h TestClientWSHandler) Process(clientId string, msg WSMsg) (response WSMsg
 // }
 
 var countClosed int
+var countRedial int
 
 func (h TestClientWSHandler) Closed(wsConn *WSConn) {
 	countClosed++
 	log.Infof("WS client %s nclosed %d", wsConn.ClientId, countClosed)
+}
+
+func (h TestClientWSHandler) AfterRedial(wsConn *WSConn) {
+	countRedial++
+	log.Infof("WS client after redial %s count %d", wsConn.ClientId, countRedial)
 }
 
 func dial(t *testing.T, u url.URL, clientId string) *WSConn {
@@ -120,6 +129,8 @@ func Test_ClientRedial(t *testing.T) {
 	s := newServer(t)
 	defer s.Close()
 
+	countRedial = 0
+
 	conn := dial(t, *s.url, "client123REDIAL")
 	defer conn.Close()
 	conn2 := dial(t, *s.url, "client1234REDIAL")
@@ -162,8 +173,8 @@ func Test_ClientRedial(t *testing.T) {
 
 	time.Sleep(time.Second * 3)
 
-	if len(webSocketMap) != 2 || countConnections != 2 {
-		t.Fatal("wrong total", len(webSocketMap), countConnections)
+	if len(webSocketMap) != 2 || countConnections != 2 || countRedial != 1 {
+		t.Fatal("wrong total", len(webSocketMap), countConnections, countRedial)
 	}
 
 }
@@ -175,6 +186,7 @@ var (
 
 func setAndSaveEnv(cPingPeriod time.Duration, serverPingPeriod time.Duration) {
 	countConnections = 0
+	countRedial = 0
 	savedClientPingPeriod = clientPingPeriod
 	savedServerPingPeriod = pingPeriod
 	clientPingPeriod = cPingPeriod
@@ -230,8 +242,8 @@ func Test_ClientRedialPINGFailure(t *testing.T) {
 
 	time.Sleep(time.Second * 3)
 
-	if len(webSocketMap) != 2 || countConnections != 2 {
-		t.Fatal("wrong total", len(webSocketMap), countConnections)
+	if len(webSocketMap) != 2 || countConnections != 2 || countRedial != 2 {
+		t.Fatal("wrong total", len(webSocketMap), countConnections, countRedial)
 	}
 
 }

@@ -1,9 +1,11 @@
 package ws
 
 import (
-	log "github.com/sirupsen/logrus"
 	"net/http/httptest"
 	"net/url"
+
+	log "github.com/sirupsen/logrus"
+
 	// "net/url"
 	"fmt"
 	"strings"
@@ -42,7 +44,8 @@ var (
 
 // TestServerWSHandler implement the handler interface
 type TestServerWSHandler struct {
-	clientId string
+	clientId    string
+	countRedial int
 }
 
 func (h TestServerWSHandler) Process(clientId string, msg WSMsg) (response WSMsg, err error) {
@@ -94,9 +97,15 @@ func (h TestServerWSHandler) Closed(wsConn *WSConn) {
 	log.Infof("server conn %s closed nconns %d", wsConn.ClientId, countConnections)
 }
 
+func (h TestServerWSHandler) AfterRedial(wsConn *WSConn) {
+	h.countRedial++
+	log.Infof("WS client %s redial %d", wsConn.ClientId, h.countRedial)
+}
+
 func newServer(t *testing.T) *wsServer {
 	var s wsServer
-	s.Server = httptest.NewServer(WebSocketHandler(&TestServerWSHandler{clientId: "server123"}))
+	handler := TestServerWSHandler{clientId: "server123"}
+	s.Server = httptest.NewServer(WebSocketHandler(&handler))
 	u := "ws" + strings.TrimPrefix(s.Server.URL, "http") // make WS protocol
 	s.url, _ = url.Parse(u + "/ws/")
 	return &s

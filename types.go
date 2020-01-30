@@ -41,6 +41,9 @@ var (
 	AutoRedial bool = true
 )
 
+type common interface {
+}
+
 type WSServer interface {
 	Accept(wsConn *WSConn) error
 	// Process(msg *WSMsg) error
@@ -48,6 +51,7 @@ type WSServer interface {
 }
 
 type WSClient interface {
+	AfterRedial(wsConn *WSConn)
 	Process(clientId string, msg WSMsg) (response WSMsg, err error)
 	Closed(wsConn *WSConn)
 }

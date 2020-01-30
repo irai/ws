@@ -50,6 +50,7 @@ func (wsConn *WSConn) redialLoop() {
 				wsConn.c = conn
 				go wsConn.clientPingLoop()
 				log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS client redial successful ")
+				wsConn.callback.AfterRedial(wsConn)
 				return
 			}
 			conn.Close()
