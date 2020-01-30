@@ -92,8 +92,8 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 			return
 		}
 
-		// send OK response back
-		msg, err = EncodeResponse(msg, nil)
+		// send OK response back and the remote IP
+		msg, err = EncodeResponse(msg, wsConn.RemoteIP)
 		if err != nil {
 			log.Error("WS server could not encode auth ack ", err)
 			wsConn.serverClose()

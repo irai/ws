@@ -1,10 +1,11 @@
 package ws
 
 import (
-	"github.com/gorilla/websocket"
-	log "github.com/sirupsen/logrus"
 	"net/url"
 	"time"
+
+	"github.com/gorilla/websocket"
+	log "github.com/sirupsen/logrus"
 )
 
 // Wait 20 seconds longer the server ping then fail
@@ -35,7 +36,7 @@ func WebSocketDial(url url.URL, clientId string, handler WSClient) (wsConn *WSCo
 
 	go wsConn.clientPingLoop()
 
-	log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS client dial success")
+	log.WithFields(log.Fields{"clientId": wsConn.ClientId, "remoteIP": wsConn.RemoteIP}).Info("WS client dial success")
 	return wsConn, nil
 }
 
@@ -115,7 +116,12 @@ func (wsConn *WSConn) sendAuthentication() (err error) {
 		return err
 	}
 
-	log.Debug("WS client dial authentication successful ", wsConn.ClientId)
+	if err = msg.Decode(nil, &wsConn.RemoteIP); err != nil {
+		log.Error("WS client dial unexpected remote IP", err, msg, seq)
+		return err
+	}
+
+	log.Debugf("WS client dial authentication successful %v remote IP %v", wsConn.ClientId, wsConn.RemoteIP)
 	return nil
 }
 
