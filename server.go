@@ -17,6 +17,8 @@ var (
 	webSocketMap map[string]*WSConn = make(map[string]*WSConn, 128)
 	// How often do ping
 	pingPeriod = 30 * time.Second
+
+	LogAll bool
 )
 
 var upgrader = websocket.Upgrader{}
@@ -33,7 +35,9 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 		// device.DeviceId = deviceId
 		wsConn := &WSConn{}
 		wsConn.RemoteIP = net.ParseIP(httpGetSrcIP(r))
-		log.WithFields(log.Fields{"public_ip": wsConn.RemoteIP}).Debug("WS server new websocket")
+		if LogAll {
+			log.WithFields(log.Fields{"public_ip": wsConn.RemoteIP}).Debug("WS server new websocket")
+		}
 
 		wsConn.c, err = upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -48,7 +52,6 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 		// First message must be the device registration
 		// wait for it
 		//
-		// log.Debug("WS Server authentication read")
 		msg, err := wsConn.read()
 		if err != nil || msg.Type() != msgAuthentication {
 			log.Error("WS server didn't get auth msg: ", err, msg)
@@ -57,8 +60,6 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 		}
 
 		token := ""
-		// var id string
-		// log.Info("WS Server authentication decode")
 		err = msg.Decode(&token, &wsConn.ClientId)
 		if err != nil {
 			log.Errorf("WS server could not decode first message: %s %s", err, msg)
@@ -72,7 +73,9 @@ func WebSocketHandler(handler WSServer) http.HandlerFunc {
 		// Close existing stale socket first
 		wsMutex.Lock()
 		if ws, ok := webSocketMap[wsConn.ClientId]; ok == true {
-			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Warn("WS server closing duplicated client id")
+			if LogAll {
+				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS server closing duplicated client id")
+			}
 
 			wsMutex.Unlock()
 			ws.serverClose()
@@ -122,7 +125,9 @@ func (wsConn *WSConn) serverClose() {
 	// if it was not closing normally, then cleanup
 	if wsConn.closing {
 		wsConn.writeMutex.Unlock()
-		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server close - duplicated")
+		if LogAll {
+			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS server close - duplicated")
+		}
 		return
 	}
 
@@ -146,7 +151,7 @@ func (wsConn *WSConn) serverClose() {
 }
 
 func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) (response WSMsg, err error)) {
-	defer log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Info("WS server reader goroutine ended")
+	defer log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Warn("WS server reader goroutine ended")
 	defer wsConn.serverClose()
 
 	// wsConn.c.SetReadDeadline(time.Now().Add(writeWait))
@@ -160,7 +165,9 @@ func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) 
 	})
 
 	for {
-		log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS Server read")
+		if LogAll {
+			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS Server read")
+		}
 		msg, err := wsConn.read()
 		if err != nil {
 			if err != ErrorClosed && !wsConn.closing { // normal closure and not closing
@@ -176,7 +183,9 @@ func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) 
 				return
 			}
 
-			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Infof("WS server got response type %v len %v", msg.Type(), len(msg))
+			if LogAll {
+				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debugf("WS server got response type %v len %v", msg.Type(), len(msg))
+			}
 			wsConn.readChannel <- msg
 			continue
 		}
@@ -186,8 +195,10 @@ func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) 
 			log.Error("websocket Unexpected authentication message")
 
 		default:
-			log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Infof("WS server process msg seq %v type %v len %v",
-				msg.Sequence(), msg.Type(), len(msg))
+			if LogAll {
+				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debugf("WS server process msg seq %v type %v len %v",
+					msg.Sequence(), msg.Type(), len(msg))
+			}
 			response, err := process(wsConn.ClientId, msg)
 			// log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debug("WS server process response", err, response)
 			if err != nil || response == nil {
@@ -196,8 +207,10 @@ func (wsConn *WSConn) serverReaderLoop(process func(clientId string, msg WSMsg) 
 				return
 			}
 			if response.Type() != msgNoResponse {
-				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Infof("WS server process response seq %v type %v len %v",
-					response.Sequence(), response.Type(), len(response))
+				if LogAll {
+					log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Debugf("WS server process response seq %v type %v len %v",
+						response.Sequence(), response.Type(), len(response))
+				}
 				_, err := wsConn.Write(response)
 				if err != nil {
 					log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS server error in response")
@@ -255,7 +268,6 @@ func serverPingLoop() {
 		for i := range table {
 			conn := table[i]
 
-			// log.WithFields(log.Fields{"clientID": conn.ClientId}).Info("WS server pinging")
 			conn.writeMutex.Lock()
 			err := conn.c.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait))
 			conn.writeMutex.Unlock()
@@ -280,8 +292,9 @@ func GetWebSocketByClientId(clientId string) (wsConn *WSConn) {
 	wsConn, ok := webSocketMap[clientId]
 	wsMutex.Unlock()
 	if !ok {
-		log.Warnf("CMD cannot find websocket for deviceID %s", clientId)
-		log.Info("websocketMap ", webSocketMap)
+		if LogAll {
+			log.Debugf("CMD cannot find websocket for deviceID %s map=%+v", clientId, webSocketMap)
+		}
 		return nil
 	}
 	return wsConn
@@ -298,12 +311,15 @@ func GetWebSocketByRemoteIP(ip net.IP) (wsConn *WSConn) {
 
 		// Return loopback wsConn if this is the local api server
 		if (wsConn.RemoteIP.Equal(net.IPv6loopback) || wsConn.RemoteIP.Equal(net.IPv4(127, 0, 0, 1))) && len(webSocketMap) == 1 {
-			log.Warnf("CMD found localhost websocket for ip %s ", ip)
+			if LogAll {
+				log.Debugf("CMD found localhost websocket for ip %s ", ip)
+			}
 			return wsConn
 		}
 	}
-	log.Warnf("CMD cannot find websocket for remote IP %s", ip)
-	log.Info("websocketMap ", webSocketMap)
+	if LogAll {
+		log.Debugf("CMD cannot find websocket for remote IP %s sockedMap=%+v", ip, webSocketMap)
+	}
 
 	return nil
 }
@@ -325,7 +341,9 @@ func httpGetSrcIP(req *http.Request) string {
 	// Header.Get is case-insensitive
 	// This is a list like "192.168.0.1, 201.123.12.8"
 	ipList := req.Header.Get("X-Forwarded-For")
-	log.Infof("controller IP %s port %v  x-forwarded-for %s", ip, port, ipList)
+	if LogAll {
+		log.Debugf("controller IP %s port %v  x-forwarded-for %s", ip, port, ipList)
+	}
 
 	if ipList != "" {
 		tmp := strings.Split(ipList, ",")
@@ -351,7 +369,9 @@ func sendHttpSpxError(w http.ResponseWriter, httpStatusCode int, err error) {
 	w.WriteHeader(httpStatusCode)
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 
-	log.WithFields(log.Fields{"code": spxError.Code, "detail": spxError.Detail, "text": spxError.Text}).Info("SendHttpSpxError")
+	if LogAll {
+		log.WithFields(log.Fields{"code": spxError.Code, "detail": spxError.Detail, "text": spxError.Text}).Debug("SendHttpSpxError")
+	}
 
 	err = json.NewEncoder(w).Encode(spxError)
 	if err != nil {
