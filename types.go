@@ -51,6 +51,7 @@ type WSServer interface {
 }
 
 type WSClient interface {
+	BeforeRedial()
 	AfterRedial(wsConn *WSConn)
 	Process(clientId string, msg WSMsg) (response WSMsg, err error)
 	Closed(wsConn *WSConn)

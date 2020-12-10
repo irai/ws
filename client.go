@@ -152,7 +152,8 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 			if err != ErrorClosed && !wsConn.closing {
 				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS client failed to read websocket message", err)
 				if AutoRedial {
-					// wsConn.c.Close() // close the underlying WS; this will stop ping goroutine.
+					wsConn.callback.BeforeRedial()
+
 					wsConn.redialLoop()
 
 					// Run this call back in a goroutine because THIS reader loop must be running to receive responses.

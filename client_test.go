@@ -43,8 +43,12 @@ func (h TestClientWSHandler) Closed(wsConn *WSConn) {
 	log.Infof("WS client %s nclosed %d", wsConn.ClientId, countClosed)
 }
 
-func (h TestClientWSHandler) AfterRedial(wsConn *WSConn) {
+func (h TestClientWSHandler) BeforeRedial() {
 	countRedial++
+	log.Infof("WS client before redial count=%d", countRedial)
+}
+
+func (h TestClientWSHandler) AfterRedial(wsConn *WSConn) {
 	log.Infof("WS client after redial %s count %d", wsConn.ClientId, countRedial)
 }
 
