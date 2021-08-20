@@ -44,6 +44,7 @@ func WebSocketDial(url url.URL, clientId string, handler WSClient) (wsConn *WSCo
 func (wsConn *WSConn) redialLoop() {
 	for {
 		log.WithFields(log.Fields{"clientId": wsConn.ClientId}).Info("WS client redialing ")
+		wsConn.callback.BeforeRedial()
 		conn, _, err := websocket.DefaultDialer.Dial(wsConn.url.String(), nil)
 		if err == nil {
 			wsConn2 := &WSConn{c: conn, ClientId: wsConn.ClientId}
@@ -152,8 +153,6 @@ func (wsConn *WSConn) clientReaderLoop(process func(clientId string, msg WSMsg) 
 			if err != ErrorClosed && !wsConn.closing {
 				log.WithFields(log.Fields{"clientID": wsConn.ClientId}).Error("WS client failed to read websocket message", err)
 				if AutoRedial {
-					wsConn.callback.BeforeRedial()
-
 					wsConn.redialLoop()
 
 					// Run this call back in a goroutine because THIS reader loop must be running to receive responses.
